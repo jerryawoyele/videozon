@@ -1,0 +1,75 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+body {
+  @apply bg-gray-900 text-white;
+}
+
+/* Add any additional global styles here */
+/* DatePicker Dark Mode Styles */
+.dark-calendar .react-datepicker {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+.dark-calendar .react-datepicker__header {
+  background-color: #1f2937;
+  border-bottom-color: #374151;
+}
+
+.dark-calendar .react-datepicker__current-month,
+.dark-calendar .react-datepicker__day-name {
+  color: white;
+}
+
+.dark-calendar .react-datepicker__day {
+  color: #d1d5db;
+}
+
+.dark-calendar .react-datepicker__day:hover {
+  background-color: #374151;
+}
+
+.dark-calendar .react-datepicker__day--selected,
+.dark-calendar .react-datepicker__day--keyboard-selected {
+  background-color: #2563eb;
+  color: white;
+}
+
+.dark-calendar .react-datepicker__day--disabled {
+  color: #6b7280;
+}
+
+.dark-calendar .react-datepicker__navigation-icon::before {
+  border-color: #d1d5db;
+}
+
+.dark-calendar .react-datepicker__navigation:hover *::before {
+  border-color: white;
+}
+
+/* Add these styles to your existing modern-scrollbar class */
+.modern-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(107, 114, 128, 0.5) rgba(31, 41, 55, 0.5);
+}
+
+.modern-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modern-scrollbar::-webkit-scrollbar-track {
+  background: rgba(31, 41, 55, 0.5);
+  border-radius: 4px;
+}
+
+.modern-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(107, 114, 128, 0.5);
+  border-radius: 4px;
+}
+
+.modern-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.7);
+}
+
