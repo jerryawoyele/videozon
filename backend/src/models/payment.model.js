@@ -1,48 +1,42 @@
 import mongoose from 'mongoose';
 
 const paymentSchema = new mongoose.Schema({
-  order: {
+  gig: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Order',
-    required: true
-  },
-  payer: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  recipient: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'Gig',
     required: true
   },
   amount: {
     type: Number,
     required: true
   },
-  currency: {
-    type: String,
-    default: 'USD'
-  },
-  paymentMethod: {
+  reference: {
     type: String,
     required: true,
-    enum: ['card', 'paypal', 'stripe']
+    unique: true
   },
   status: {
     type: String,
-    enum: ['pending', 'completed', 'failed', 'refunded'],
+    enum: ['pending', 'completed', 'failed'],
     default: 'pending'
   },
-  transactionId: String,
-  paymentIntentId: String,
-  refundReason: String,
+  paymentMethod: {
+    type: String,
+    enum: ['paystack'],
+    required: true
+  },
   metadata: {
-    type: Map,
-    of: String
+    type: mongoose.Schema.Types.Mixed
   }
 }, {
   timestamps: true
 });
 
-export default mongoose.model('Payment', paymentSchema); 
+// Indexes
+paymentSchema.index({ gig: 1 });
+paymentSchema.index({ reference: 1 }, { unique: true });
+paymentSchema.index({ status: 1 });
+
+const Payment = mongoose.model('Payment', paymentSchema);
+
+export default Payment; 

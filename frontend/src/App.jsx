@@ -19,12 +19,15 @@ import CreateEventPage from './pages/events/CreateEventPage';
 import EventDetailsPage from './pages/events/EventDetailsPage';
 import MessagesPage from './pages/messages/MessagesPage';
 import MessageDetailPage from './pages/messages/MessageDetailPage';
-import NotificationsPage from './pages/NotificationsPage';
+import NotificationsPage from './pages/notifications/NotificationsPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
-import MyGigsPage from './pages/gigs/MyGigsPage';
+import GigsPage from './pages/gigs/GigsPage';
+import GigPreviewPage from './pages/gigs/GigPreviewPage';
 import ProfessionalsPage from './pages/professionals/ProfessionalsPage';
 import ProfessionalProfilePage from './pages/professionals/ProfessionalProfilePage';
+import HireProfessionalPage from './pages/hire/HireProfessionalPage';
+import PaymentPage from './pages/payments/PaymentPage';
 
 function App() {
   return (
@@ -83,6 +86,7 @@ function App() {
             <MessageDetailPage />
           </PrivateRoute>
         } />
+        <Route path="/hire/:id" element={<HireProfessionalPage />} />
 
         {/* Professional Routes */}
         <Route path="/professionals" element={
@@ -96,6 +100,25 @@ function App() {
           </PrivateRoute>
         } />
 
+        {/* My gigs Routes */}
+        <Route path="/gigs" element={
+          <PrivateRoute>
+            <GigsPage />
+          </PrivateRoute>
+        } />
+
+        <Route path="/gigs/:id/preview" element={
+          <PrivateRoute>
+            <GigPreviewPage />
+          </PrivateRoute>
+        } />
+
+        <Route path="/payments/:gigId" element={
+          <PrivateRoute>
+            <PaymentPage />
+          </PrivateRoute>
+        } />
+
         {/* User Routes */}
         <Route path="/profile" element={
           <PrivateRoute>
@@ -104,7 +127,7 @@ function App() {
         } />
         <Route path="/gigs" element={
           <PrivateRoute>
-            <MyGigsPage />
+            <GigsPage />
           </PrivateRoute>
         } />
         <Route path="/notifications" element={

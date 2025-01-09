@@ -5,24 +5,15 @@ import NotificationService from '../services/notification.service.js';
 
 export const createEvent = async (req, res) => {
   try {
-    // Parse the event data from the form data
-    const eventData = JSON.parse(req.body.eventData);
-
-    // Create new event with parsed data
-    const event = new Event({
-      ...eventData,
-      organizer: req.user.id,
-      // Handle image uploads if present
-      images: req.files ? req.files.map(file => ({
-        url: file.path,
-        publicId: file.filename
-      })) : []
-    });
-
-    await event.save();
+    const userId = req.user.id;
+    const eventData = { ...req.body, organizer: userId };
     
-    // Create notification for new event
-    await NotificationService.notifyEventCreated(event);
+    const event = new Event(eventData);
+    await event.save();
+    await event.populate('organizer', 'name');
+
+    // Notify chat partners about the new event
+    await NotificationService.notifyNewEvent(event, req.user);
 
     return successResponse(res, 201, 'Event created successfully', { event });
   } catch (error) {
@@ -151,6 +142,18 @@ export const getAllEvents = async (req, res) => {
       if (endDate) query.datetime.$lte = new Date(endDate);
     }
 
+    // First, update status of past events
+    const now = new Date();
+    await Event.updateMany(
+      {
+        datetime: { $lt: now },
+        status: 'active'
+      },
+      {
+        $set: { status: 'concluded' }
+      }
+    );
+
     const events = await Event.find(query)
       .populate('organizer', 'name email avatar')
       .populate('professionals.professional', 'name email avatar')
@@ -187,6 +190,18 @@ export const getEvents = async (req, res) => {
       if (endDate) query.datetime.$lte = new Date(endDate);
     }
 
+    // First, update status of past events
+    const now = new Date();
+    await Event.updateMany(
+      {
+        datetime: { $lt: now },
+        status: 'active'
+      },
+      {
+        $set: { status: 'concluded' }
+      }
+    );
+
     const events = await Event.find(query)
       .populate('organizer', 'name')
       .populate('professionals.professional', 'name')
@@ -201,10 +216,10 @@ export const getEvents = async (req, res) => {
 
 export const getMyEvents = async (req, res) => {
   try {
-    const { search, status, startDate, endDate } = req.query;
+    const { search, status, startDate, endDate, userId } = req.query;
     
     // Build query for events created by the user
-    const query = { organizer: req.user._id };
+    const query = { organizer: userId || req.user._id };
     
     if (search) {
       query.$and = [{

@@ -6,10 +6,10 @@ import { createNotification } from './notification.service.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-export const createPaymentIntent = async (orderId, amount, currency = 'usd') => {
+export const createPaymentIntent = async (orderId, amount, currency = 'ngn') => {
   try {
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount * 100, // Convert to cents
+      amount: amount * 100, // Convert to kobo
       currency,
       metadata: { orderId }
     });

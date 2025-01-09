@@ -32,8 +32,37 @@ const DashboardPage = () => {
   const fetchDashboardData = async () => {
     try {
       const response = await axios.get(`${import.meta.env.VITE_API_URL}/dashboard`);
-      setStats(response.data.data.stats);
+      if (response.data.success) {
+        const { stats } = response.data.data;
+        
+        // Format the data based on user role
+        if (user.role === 'professional') {
+          setStats({
+            ...stats,
+            currentGigs: stats.currentGigs?.map(gig => ({
+              ...gig,
+              event: {
+                ...gig,
+                _id: gig._id,
+                title: gig.title,
+                datetime: gig.datetime
+              }
+            })) || []
+          });
+        } else {
+          setStats({
+            ...stats,
+            recentEvents: stats.recentEvents?.map(event => ({
+              ...event,
+              _id: event._id,
+              title: event.title,
+              datetime: event.datetime
+            })) || []
+          });
+        }
+      }
     } catch (error) {
+      console.error('Dashboard error:', error);
       toast.error('Failed to fetch dashboard data');
     } finally {
       setIsLoading(false);
@@ -41,6 +70,7 @@ const DashboardPage = () => {
   };
 
   const formatDate = (date) => {
+    if (!date) return '';
     return new Date(date).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -57,7 +87,7 @@ const DashboardPage = () => {
       </Layout>
     );
   }
-
+  console.log("stats", stats);
   return (
     <Layout>
       <div className="p-6">
@@ -73,21 +103,21 @@ const DashboardPage = () => {
                     <h3 className="text-lg font-semibold text-white">Active Gigs</h3>
                     <Briefcase className="h-8 w-8 text-blue-500" />
                   </div>
-                  <p className="text-3xl font-bold text-white">{stats.activeGigs}</p>
+                  <p className="text-3xl font-bold text-white">{stats.activeGigs || 0}</p>
                 </div>
                 <div className="bg-gray-800 p-6 rounded-lg">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-white">Total Earnings</h3>
                     <DollarSign className="h-8 w-8 text-green-500" />
                   </div>
-                  <p className="text-3xl font-bold text-white">${stats.totalEarnings}</p>
+                  <p className="text-3xl font-bold text-white">₦{stats.totalEarnings?.toLocaleString() || 0}</p>
                 </div>
                 <div className="bg-gray-800 p-6 rounded-lg">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-white">Upcoming Events</h3>
                     <Clock className="h-8 w-8 text-yellow-500" />
                   </div>
-                  <p className="text-3xl font-bold text-white">{stats.upcomingEvents}</p>
+                  <p className="text-3xl font-bold text-white">{stats.upcomingEvents || 0}</p>
                 </div>
               </>
             ) : (
@@ -97,21 +127,21 @@ const DashboardPage = () => {
                     <h3 className="text-lg font-semibold text-white">Active Events</h3>
                     <Calendar className="h-8 w-8 text-blue-500" />
                   </div>
-                  <p className="text-3xl font-bold text-white">{stats.activeEvents}</p>
+                  <p className="text-3xl font-bold text-white">{stats.activeEvents || 0}</p>
                 </div>
                 <div className="bg-gray-800 p-6 rounded-lg">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-white">Total Events</h3>
                     <Archive className="h-8 w-8 text-green-500" />
                   </div>
-                  <p className="text-3xl font-bold text-white">{stats.totalEvents}</p>
+                  <p className="text-3xl font-bold text-white">{stats.totalEvents || 0}</p>
                 </div>
                 <div className="bg-gray-800 p-6 rounded-lg">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-white">Upcoming Events</h3>
                     <Clock className="h-8 w-8 text-yellow-500" />
                   </div>
-                  <p className="text-3xl font-bold text-white">{stats.upcomingEvents}</p>
+                  <p className="text-3xl font-bold text-white">{stats.upcomingEvents || 0}</p>
                 </div>
               </>
             )}
@@ -128,12 +158,12 @@ const DashboardPage = () => {
                       <div
                         key={gig._id}
                         className="flex items-center justify-between p-4 bg-gray-700 rounded-lg cursor-pointer hover:bg-gray-600"
-                        onClick={() => navigate(`/events/${gig.event._id}`)}
+                        onClick={() => navigate(`/gigs`)}
                       >
                         <div>
                           <h3 className="text-white font-medium">{gig.event.title}</h3>
                           <p className="text-sm text-gray-400">
-                            {formatDate(gig.event.datetime)} - {gig.service}
+                            {formatDate(gig.event.datetime)}
                           </p>
                         </div>
                         <Eye className="h-5 w-5 text-gray-400" />
@@ -178,10 +208,26 @@ const DashboardPage = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-4 bg-gray-700 rounded-lg">
                   <div className="flex items-center">
+                    <Bell className="h-5 w-5 text-blue-500 mr-3" />
+                    <div>
+                      <p className="text-white">Unread Notifications</p>
+                      <p className="text-sm text-gray-400">{stats.unreadNotifications || 0} new notifications</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => navigate('/notifications')}
+                    className="text-blue-500 hover:text-blue-400"
+                  >
+                    View
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-gray-700 rounded-lg">
+                  <div className="flex items-center">
                     <MessageSquare className="h-5 w-5 text-blue-500 mr-3" />
                     <div>
                       <p className="text-white">Unread Messages</p>
-                      <p className="text-sm text-gray-400">{stats.unreadMessages} new messages</p>
+                      <p className="text-sm text-gray-400">{stats.unreadMessages || 0} new messages</p>
                     </div>
                   </div>
                   <button
@@ -197,26 +243,11 @@ const DashboardPage = () => {
                     <AlertCircle className="h-5 w-5 text-red-500 mr-3" />
                     <div>
                       <p className="text-white">Pending Requests</p>
-                      <p className="text-sm text-gray-400">{stats.pendingRequests} requests</p>
+                      <p className="text-sm text-gray-400">{stats.pendingRequests || 0} requests</p>
                     </div>
                   </div>
                   <button
-                    onClick={() => navigate('/messages')}
-                    className="text-blue-500 hover:text-blue-400"
-                  >
-                    View
-                  </button>
-                </div>
-                <div className="flex items-center justify-between p-4 bg-gray-700 rounded-lg">
-                  <div className="flex items-center">
-                    <Bell className="h-5 w-5 text-yellow-500 mr-3" />
-                    <div>
-                      <p className="text-white">Notifications</p>
-                      <p className="text-sm text-gray-400">{stats.unreadNotifications} unread</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => navigate('/notifications')}
+                    onClick={() => navigate('/messages?tab=received')}
                     className="text-blue-500 hover:text-blue-400"
                   >
                     View

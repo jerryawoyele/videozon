@@ -1,10 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
-import { Plus, CalendarIcon, Search, Filter } from 'lucide-react';
+import { Plus, CalendarIcon, Search, Filter, User } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import axios from '../../utils/axios';
 import toast from 'react-hot-toast';
+import DefaultAvatar from '../../components/DefaultAvatar';
+
+const Avatar = ({ user, className = "w-10 h-10" }) => {
+  const [imgError, setImgError] = useState(false);
+
+  if (!user) {
+    return (
+      <div className={`${className} rounded-full bg-gray-700 flex items-center justify-center`}>
+        <User className="w-6 h-6 text-gray-400" />
+      </div>
+    );
+  }
+
+  if (imgError || !user.avatar) {
+    return <DefaultAvatar name={user.name} className={className} />;
+  }
+
+  return (
+    <img 
+      src={user.avatar}
+      alt={user.name}
+      className={`${className} rounded-full object-cover`}
+      onError={() => setImgError(true)}
+    />
+  );
+};
 
 const EventsPage = () => {
   const navigate = useNavigate();
@@ -26,7 +52,7 @@ const EventsPage = () => {
   const fetchEvents = async () => {
     setIsLoading(true);
     try {
-      const endpoint = activeTab === 'all' ? '/events/all' : '/events/my-events';
+      const endpoint = activeTab === 'all' ? '/events/all' : '/events';
       const params = new URLSearchParams();
       
       if (searchTerm) params.append('search', searchTerm);
@@ -36,7 +62,18 @@ const EventsPage = () => {
 
       const response = await axios.get(`${endpoint}?${params.toString()}`);
       if (response.data.success) {
-        setEvents(response.data.data.events);
+        const now = new Date();
+        const filteredEvents = response.data.data.events
+          .map(event => {
+            const eventDate = new Date(event.datetime);
+            if (eventDate < now && event.status === 'active') {
+              event.status = 'concluded';
+            }
+            return event;
+          })
+          .filter(event => event.status !== 'concluded');
+          
+        setEvents(filteredEvents);
       }
     } catch (error) {
       toast.error('Failed to fetch events');
@@ -51,23 +88,57 @@ const EventsPage = () => {
       if (!isValid(date)) {
         return 'Date not set';
       }
-      return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { 
+      
+      const day = date.getDate();
+      const suffix = getDaySuffix(day);
+      const month = date.toLocaleString('default', { month: 'long' });
+      const year = date.getFullYear();
+      const time = date.toLocaleTimeString([], { 
         hour: '2-digit', 
         minute: '2-digit'
-      })}`;
+      });
+      
+      return `${day}${suffix} ${month}, ${year} ${time}`;
     } catch (error) {
       return 'Date not set';
     }
   };
 
+  const getDaySuffix = (day) => {
+    if (day > 3 && day < 21) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
-      case 'completed':
+      case 'concluded':
         return 'bg-green-500/20 text-green-400';
-      case 'pending':
+      case 'ongoing':
         return 'bg-yellow-500/20 text-yellow-400';
+      case 'cancelled':
+        return 'bg-red-500/20 text-red-400';
       default:
         return 'bg-blue-500/20 text-blue-400';
+    }
+  };
+
+  const getDaysToEvent = (datetime) => {
+    const now = new Date();
+    const eventDate = new Date(datetime);
+    const diffTime = eventDate - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return 'Today';
+    } else if (diffDays < 0) {
+      return `${Math.abs(diffDays)} days ago`;
+    } else {
+      return `${diffDays} days to go`;
     }
   };
 
@@ -181,24 +252,24 @@ const EventsPage = () => {
               {events.map((event) => (
                 <div key={event._id} className="bg-gray-800 rounded-lg p-6">
                   <h3 className="text-xl font-semibold text-white mb-2">{event.title}</h3>
-                  <div className="flex items-center text-gray-400 mb-4">
-                    <CalendarIcon className="h-4 w-4 mr-2" />
-                    {formatEventDate(event.datetime)}
+                  <div className="flex items-center justify-between text-gray-400 mb-4">
+                    <div className="flex items-center">
+                      <CalendarIcon className="h-4 w-4 mr-2" />
+                      {formatEventDate(event.datetime)}
+                    </div>
+                    <div className="text-sm font-medium">
+                      {getDaysToEvent(event.datetime)}
+                    </div>
                   </div>
                   {event.organizer && (
-                    <div className="flex items-center mb-4">
-                      <img
-                        src={event.organizer.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(event.organizer.name)}&background=random`}
-                        alt={event.organizer.name}
-                        className="h-8 w-8 rounded-full mr-3"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = '/default-avatar.png';
-                        }}
+                    <div className="flex items-center mb-4 space-x-4">
+                      <Avatar 
+                        user={event.organizer} 
+                        className="w-12 h-12 flex-shrink-0"
                       />
-                      <div>
-                        <p className="text-white">{event.organizer.name}</p>
-                        <p className="text-sm text-gray-400">Organizer</p>
+                      <div className="flex-1">
+                        <p className="text-white font-medium text-base">{event.organizer.name}</p>
+                        <p className="text-sm text-gray-400 mt-0.5">Organizer</p>
                       </div>
                     </div>
                   )}

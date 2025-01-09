@@ -331,13 +331,27 @@ export const updateProfile = async (req, res) => {
 export const updateUserStatus = async (req, res) => {
   try {
     const { isOnline, lastSeen } = req.body;
+    const userId = req.user.id;
     
-    await User.findByIdAndUpdate(req.user.id, {
+    const updatedUser = await User.findByIdAndUpdate(userId, {
       isOnline,
       lastSeen: isOnline ? undefined : (lastSeen || new Date())
-    });
+    }, { new: true });
 
-    return successResponse(res, 200, 'Status updated successfully');
+    // Emit user status update through socket
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('user:status', {
+        userId,
+        isOnline,
+        lastSeen: updatedUser.lastSeen
+      });
+    }
+
+    return successResponse(res, 200, 'Status updated successfully', {
+      isOnline: updatedUser.isOnline,
+      lastSeen: updatedUser.lastSeen
+    });
   } catch (error) {
     logger.error('Update user status error:', error);
     return httpResponses.serverError(res, 'Failed to update status');
@@ -360,5 +374,21 @@ export const getUserStatus = async (req, res) => {
   } catch (error) {
     logger.error('Get user status error:', error);
     return httpResponses.serverError(res, 'Failed to get user status');
+  }
+};
+
+export const getPortfolio = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return httpResponses.notFound(res, 'User not found');
+    }
+
+    return successResponse(res, 200, 'Portfolio retrieved successfully', {
+      portfolio: user.portfolio || []
+    });
+  } catch (error) {
+    logger.error('Get portfolio error:', error);
+    return httpResponses.serverError(res, 'Failed to fetch portfolio');
   }
 }; 

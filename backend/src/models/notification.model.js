@@ -18,6 +18,10 @@ const notificationSchema = new mongoose.Schema({
       'service_request',
       'service_accepted',
       'service_rejected',
+      // Hire related
+      'hire_request',
+      'hire_accepted',
+      'hire_rejected',
       // Professional related
       'professional_joined',
       'professional_left',

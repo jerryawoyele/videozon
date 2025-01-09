@@ -59,12 +59,8 @@ const Login = () => {
         
         toast.success('Login successful!');
 
-        // Redirect based on user role
-        if (user.role === 'professional') {
-          navigate('/events')
-        }else{
-          navigate('/')
-        }
+        // Redirect to dashboard for all users
+        navigate('/dashboard');
       }
     } catch (error) {
       console.error('Login error:', error);

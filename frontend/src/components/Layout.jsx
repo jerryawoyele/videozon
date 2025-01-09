@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
-  Menu, X, Home, Briefcase, Calendar, MessageSquare, 
-  Bell, LogOut, User, Users
+  Menu, X, Home, Briefcase, Calendar,  
+  Bell, LogOut, User, Users, Mail
 } from 'lucide-react';
 import api from '../utils/axios';
 import Logo from './Logo';
@@ -41,9 +41,9 @@ const Layout = ({ children }) => {
     { name: 'Events', href: '/events', icon: Calendar },
     { name: 'Professionals', href: '/professionals', icon: Users },
     ...(isProfessional ? [
-      { name: 'My Gigs', href: '/professionals/gigs', icon: Briefcase }
+      { name: 'Messages', href: '/messages', icon: Mail },
+      { name: 'My Gigs', href: '/gigs', icon: Briefcase }
     ] : []),
-    { name: 'Messages', href: '/messages', icon: MessageSquare },
     { name: 'Notifications', href: '/notifications', icon: Bell }
   ];
 
@@ -111,7 +111,11 @@ const Layout = ({ children }) => {
           <div className="mt-auto px-3 py-4">
             <Link
               to="/profile"
-              className="flex items-center px-4 py-3 text-sm font-semibold text-gray-300 rounded-md hover:bg-gray-700 hover:text-white transition-colors duration-150 ease-in-out"
+              className={`
+                flex items-center px-4 py-3 text-sm font-semibold rounded-md
+                transition-colors duration-150 ease-in-out mb-2
+                ${isActive('/profile') ? 'bg-gray-900 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}
+              `}
             >
               <User className="mr-4 h-5 w-5" />
               Profile

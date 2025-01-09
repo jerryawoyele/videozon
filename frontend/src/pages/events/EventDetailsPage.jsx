@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
+import Avatar from '../../components/Avatar';
 import { 
   Calendar, MapPin, Clock, Users, 
   DollarSign, MessageSquare, User,
@@ -11,6 +12,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import ServiceOfferModal from '../../components/ServiceOfferModal';
 import { CATEGORIES } from '../../constants/eventConstants';
+import { isValid } from 'date-fns';
 
 const EventDetailsPage = () => {
   const { id } = useParams();
@@ -38,6 +40,7 @@ const EventDetailsPage = () => {
     services: []
   });
   const [hasOffered, setHasOffered] = useState(false);
+  const [hasContactedOrganizer, setHasContactedOrganizer] = useState(false);
 
   useEffect(() => {
     fetchEventDetails();
@@ -64,6 +67,12 @@ const EventDetailsPage = () => {
       checkExistingOffer();
     }
   }, [user, event]);
+
+  useEffect(() => {
+    if (event?.organizer?._id && user?._id) {
+      checkOrganizerContact();
+    }
+  }, [event, user]);
 
   const fetchEventDetails = async () => {
     try {
@@ -105,15 +114,20 @@ const EventDetailsPage = () => {
 
     setIsSubmitting(true);
     try {
-      await axios.post(`${import.meta.env.VITE_API_URL}/events/${id}/offer-services`, {
+      // Send service offer through the messaging system
+      await axios.post(`${import.meta.env.VITE_API_URL}/messages/service-offer`, {
+        receiverId: event.organizer._id,
+        eventId: event._id,
         services: selectedServices,
-        message
+        content: message || `I would like to offer my services for your event: ${event.title}`,
+        type: 'service_offer'
       });
       
       toast.success('Service offer sent successfully');
       setShowOfferModal(false);
       setSelectedServices([]);
       setMessage('');
+      setHasOffered(true);
       fetchEventDetails(); // Refresh event details
     } catch (error) {
       console.error('Offer services error:', error);
@@ -162,6 +176,127 @@ const EventDetailsPage = () => {
     }
   };
 
+  const checkOrganizerContact = async () => {
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/messages/sent-requests`);
+      const sentRequests = response.data.data.requests || [];
+      
+      // Check if there's a request for this specific event
+      const hasContacted = sentRequests.some(request => 
+        request.relatedEvent?._id === event._id
+      );
+      
+      setHasContactedOrganizer(hasContacted);
+      setRequestSent(hasContacted);
+    } catch (error) {
+      console.error('Error checking organizer contact:', error);
+    }
+  };
+
+  const handleContactOrganizer = async () => {
+    if (hasContactedOrganizer || requestSent) {
+      toast.error('You have already contacted this organizer for this event');
+      return;
+    }
+
+    try {
+      // Double check before sending
+      const checkResponse = await axios.get(`${import.meta.env.VITE_API_URL}/messages/sent-requests`);
+      const existingRequests = checkResponse.data.data.requests || [];
+      
+      const alreadyContacted = existingRequests.some(request => 
+        request.relatedEvent?._id === event._id
+      );
+
+      if (alreadyContacted) {
+        setHasContactedOrganizer(true);
+        setRequestSent(true);
+        toast.error('You have already contacted this organizer for this event');
+        return;
+      }
+
+      // If no existing request, proceed with sending
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/messages/service-request`, {
+        receiverId: event.organizer._id,
+        eventId: event._id,
+        content: `I would like to discuss about your event: ${event.title}`,
+        type: 'service_request'
+      });
+
+      if (response.data.success) {
+        setHasContactedOrganizer(true);
+        setRequestSent(true);
+        toast.success('Contact request sent to organizer');
+        
+        // Refresh the contact status
+        await checkOrganizerContact();
+      }
+    } catch (error) {
+      console.error('Contact request error:', error);
+      toast.error(error.response?.data?.message || 'Failed to send contact request');
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'concluded':
+        return 'bg-green-500/20 text-green-500';
+      case 'ongoing':
+        return 'bg-yellow-500/20 text-yellow-500';
+      case 'cancelled':
+        return 'bg-red-500/20 text-red-500';
+      default:
+        return 'bg-blue-500/20 text-blue-500';
+    }
+  };
+
+  const getDaysToEvent = (datetime) => {
+    const now = new Date();
+    const eventDate = new Date(datetime);
+    const diffTime = eventDate - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return 'Today';
+    } else if (diffDays < 0) {
+      return `${Math.abs(diffDays)} days ago`;
+    } else {
+      return `${diffDays} days to go`;
+    }
+  };
+
+  const formatEventDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      if (!isValid(date)) {
+        return 'Date not set';
+      }
+      
+      const day = date.getDate();
+      const suffix = getDaySuffix(day);
+      const month = date.toLocaleString('default', { month: 'long' });
+      const year = date.getFullYear();
+      const time = date.toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit'
+      });
+      
+      return `${day}${suffix} ${month}, ${year} ${time}`;
+    } catch (error) {
+      return 'Date not set';
+    }
+  };
+
+  const getDaySuffix = (day) => {
+    if (day > 3 && day < 21) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  };
+
   if (isLoading) {
     return (
       <Layout>
@@ -184,7 +319,7 @@ const EventDetailsPage = () => {
             className="flex items-center text-gray-400 hover:text-white mb-6 transition-colors"
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
-            Back to Events
+            Back
           </button>
 
           {/* Event Images */}
@@ -204,12 +339,9 @@ const EventDetailsPage = () => {
               <div>
                 <h1 className="text-2xl font-bold text-white mb-2">{event.title}</h1>
                 <p className="text-gray-400 capitalize">{event.category}</p>
+                <p className="text-gray-400 mt-2">{getDaysToEvent(event.datetime)}</p>
               </div>
-              <span className={`px-3 py-1 rounded-full text-sm ${
-                event.status === 'active' ? 'bg-green-500/20 text-green-500' :
-                event.status === 'cancelled' ? 'bg-red-500/20 text-red-500' :
-                'bg-yellow-500/20 text-yellow-500'
-              }`}>
+              <span className={`px-3 py-1 rounded-full text-sm ${getStatusColor(event.status)}`}>
                 {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
               </span>
             </div>
@@ -223,7 +355,7 @@ const EventDetailsPage = () => {
                 <div className="flex items-center">
                   <Calendar className="h-5 w-5 text-gray-400 mr-3" />
                   <span className="text-gray-300">
-                    {new Date(event.datetime).toLocaleDateString()}
+                    {formatEventDate(event.datetime)}
                   </span>
                 </div>
                 <div className="flex items-center">
@@ -242,55 +374,52 @@ const EventDetailsPage = () => {
                 </div>
                 <div className="flex items-center">
                   <DollarSign className="h-5 w-5 text-gray-400 mr-3" />
-                  <span className="text-gray-300">Budget: ${event.budget}</span>
+                  <span className="text-gray-300">Budget: ₦{event.budget?.toLocaleString()}</span>
                 </div>
               </div>
             </div>
 
             <div className="bg-gray-800 rounded-lg p-6">
               <h2 className="text-lg font-semibold text-white mb-4">Organizer</h2>
-              <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0">
-                  <User className="h-10 w-10 text-gray-400" />
+              <div className="flex flex-col p-4 sm:p-6 bg-gray-700/50 rounded-lg space-y-4">
+                {/* Organizer Info */}
+                <div className="flex items-center space-x-4">
+                  <Avatar 
+                    user={event.organizer} 
+                    className="w-12 h-12"
+                  />
+                  <div className="ml-4">
+                    <h3 className="text-white font-medium text-lg">{event.organizer.name}</h3>
+                    <p className="text-gray-400 text-sm mt-1">{event.organizer.email}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-white font-medium">{event.organizer.name}</h3>
-                  <p className="text-gray-400">{event.organizer.email}</p>
-                  {user._id === event.organizer._id ? (
-                    <div className="mt-2 text-gray-400 text-sm">
-                      You are the organizer
-                    </div>
-                  ) : (
-                    <>
-                      {requestSent ? (
-                        <div className="mt-2 flex items-center text-gray-400">
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Request Sent
-                        </div>
-                      ) : (
-                        <button
-                          onClick={async () => {
-                            try {
-                              await axios.post(`${import.meta.env.VITE_API_URL}/messages/service-request`, {
-                                receiverId: event.organizer._id,
-                                eventId: event._id,
-                                message: `I would like to discuss about your event: ${event.title}`
-                              });
-                              setRequestSent(true);
-                              toast.success('Contact request sent to organizer');
-                            } catch (error) {
-                              toast.error('Failed to send contact request');
-                            }
-                          }}
-                          className="mt-2 flex items-center text-blue-500 hover:text-blue-400"
-                        >
-                          <MessageSquare className="h-4 w-4 mr-1" />
-                          Contact Organizer
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
+                
+                {/* Contact Button */}
+                {user._id !== event.organizer._id && (
+                  <div className="w-full">
+                    {hasContactedOrganizer || event.status === 'concluded' ? (
+                      <div className="flex items-center justify-center text-gray-400 bg-gray-600/50 px-4 sm:px-6 py-3 rounded-lg w-full sm:w-auto">
+                        <CheckCircle className="h-5 w-5 mr-3" />
+                        <span className="text-gray-300">
+                          {event.status === 'concluded' ? 'Event Concluded' : 'Already Contacted'}
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleContactOrganizer}
+                        disabled={hasContactedOrganizer || requestSent || event.status === 'concluded'}
+                        className={`flex items-center justify-center px-4 sm:px-6 py-3 w-full sm:w-auto ${
+                          hasContactedOrganizer || requestSent || event.status === 'concluded'
+                            ? 'bg-gray-600 cursor-not-allowed' 
+                            : 'bg-blue-600 hover:bg-blue-700'
+                        } text-white rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl`}
+                      >
+                        <MessageSquare className="h-5 w-5 mr-3" />
+                        Contact Organizer
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -329,18 +458,23 @@ const EventDetailsPage = () => {
           <div className="flex justify-end space-x-4 mb-6">
             {!isOrganizer && user.role === 'professional' && (
               <>
-                {hasOffered ? (
+                {hasOffered || event.status === 'concluded' ? (
                   <button
                     disabled
                     className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-md cursor-not-allowed"
                   >
                     <CheckCircle className="h-5 w-5 mr-2" />
-                    Service Offered
+                    {event.status === 'concluded' ? 'Event Concluded' : 'Service Offered'}
                   </button>
                 ) : (
                   <button
                     onClick={handleServiceOffer}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    disabled={event.status === 'concluded'}
+                    className={`flex items-center px-4 py-2 ${
+                      event.status === 'concluded' 
+                        ? 'bg-gray-600 cursor-not-allowed' 
+                        : 'bg-blue-600 hover:bg-blue-700'
+                    } text-white rounded-md`}
                   >
                     <Plus className="h-5 w-5 mr-2" />
                     Offer Services

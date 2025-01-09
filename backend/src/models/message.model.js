@@ -29,7 +29,7 @@ const messageSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['message', 'service_request', 'service_offer'],
+    enum: ['message', 'service_request', 'service_offer', 'hire_request'],
     default: 'message'
   },
   content: {
@@ -41,8 +41,24 @@ const messageSchema = new mongoose.Schema({
     ref: 'Event'
   },
   service: {
-    type: String,
-    enum: ['photographer', 'videographer', 'caterer', 'musician', 'decorator', 'planner', 'security', 'mc']
+    type: [String],
+    validate: {
+      validator: function(services) {
+        const validServices = ['photographer', 'videographer', 'caterer', 'musician', 'decorator', 'planner', 'security', 'mc'];
+        return services.every(service => validServices.includes(service));
+      },
+      message: props => `${props.value} contains invalid service(s)`
+    }
+  },
+  services: {
+    type: [String],
+    validate: {
+      validator: function(services) {
+        const validServices = ['photographer', 'videographer', 'caterer', 'musician', 'decorator', 'planner', 'security', 'mc'];
+        return services.every(service => validServices.includes(service));
+      },
+      message: props => `${props.value} contains invalid service(s)`
+    }
   },
   status: {
     type: String,
@@ -58,6 +74,10 @@ const messageSchema = new mongoose.Schema({
     default: false
   },
   isDeleted: {
+    type: Boolean,
+    default: false
+  },
+  isResponseMessage: {
     type: Boolean,
     default: false
   },

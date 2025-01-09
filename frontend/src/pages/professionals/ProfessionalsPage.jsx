@@ -5,6 +5,32 @@ import { User, Star, Search } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
+import DefaultAvatar from '../../components/DefaultAvatar';
+
+const Avatar = ({ user, className = "w-10 h-10" }) => {
+  const [imgError, setImgError] = useState(false);
+
+  if (!user) {
+    return (
+      <div className={`${className} rounded-full bg-gray-700 flex items-center justify-center`}>
+        <User className="w-6 h-6 text-gray-400" />
+      </div>
+    );
+  }
+
+  if (imgError || !user.avatar) {
+    return <DefaultAvatar name={user.name} className={className} />;
+  }
+
+  return (
+    <img 
+      src={user.avatar}
+      alt={user.name}
+      className={`${className} rounded-full object-cover`}
+      onError={() => setImgError(true)}
+    />
+  );
+};
 
 const ProfessionalsPage = () => {
   const [professionals, setProfessionals] = useState([]);
@@ -109,17 +135,7 @@ const ProfessionalsPage = () => {
               <div className="flex-1">
                 <div className="p-6 pb-3">
                   <div className="flex items-center space-x-4">
-                    <div className="h-16 w-16 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center overflow-hidden ring-2 ring-gray-700">
-                      {professional.avatar ? (
-                        <img
-                          src={professional.avatar.url}
-                          alt={professional.name}
-                          className="h-16 w-16 rounded-full object-cover"
-                        />
-                      ) : (
-                        <User className="h-8 w-8 text-gray-400" />
-                      )}
-                    </div>
+                    <Avatar user={professional} className="w-16 h-16 md:w-20 md:h-20" />
                     <div>
                       <h3 className="text-lg font-semibold text-white">
                         {professional.name}

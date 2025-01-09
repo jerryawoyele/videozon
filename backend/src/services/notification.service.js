@@ -1,184 +1,310 @@
 import Notification from '../models/notification.model.js';
-import logger from '../config/logger.js';
+import User from '../models/user.model.js';
+import { getIO } from '../config/socket.js';
 
 class NotificationService {
-  static async createNotification(recipientId, type, title, message, metadata = {}) {
+  static async notifyNewMessage(message) {
     try {
-      const notification = new Notification({
-        recipient: recipientId,
-        type,
-        title,
-        message,
-        metadata
+      // Only create notification for the receiver
+      const notification = await Notification.create({
+        recipient: message.receiver,
+        type: 'message_received',
+        title: 'New Message',
+        message: `${message.sender.name} sent you a message`,
+        metadata: {
+          messageId: message._id,
+          userId: message.sender
+        }
       });
 
-      await notification.save();
+      await notification.populate('metadata.userId', 'name');
+
+      // Emit socket event to recipient's room
+      getIO().to(message.receiver.toString()).emit('notification:new', {
+        ...notification.toObject(),
+        type: 'message_received'
+      });
+
       return notification;
     } catch (error) {
-      logger.error('Create notification error:', error);
-      throw error;
+      console.error('Error creating message notification:', error);
     }
   }
 
-  // Event notifications
-  static async notifyEventCreated(event) {
-    const message = `New event "${event.title}" has been created`;
-    return this.createNotification(
-      event.organizer._id || event.organizer,
-      'event_created',
-      'New Event Created',
-      message,
-      { eventId: event._id }
-    );
+  static async notifyMessageRequest(request) {
+    try {
+      const notification = await Notification.create({
+        recipient: request.receiver,
+        type: 'message_request',
+        title: 'New Service Request',
+        message: `${request.sender.name} sent you a service request`,
+        metadata: {
+          messageId: request._id,
+          userId: request.sender
+        }
+      });
+
+      await notification.populate('metadata.userId', 'name');
+
+      // Emit socket event to recipient's room
+      getIO().to(request.receiver.toString()).emit('notification:new', {
+        ...notification.toObject(),
+        type: 'message_request'
+      });
+
+      return notification;
+    } catch (error) {
+      console.error('Error creating request notification:', error);
+    }
+  }
+
+  static async notifyNewEvent(event, creator) {
+    try {
+      // Get all users who have chatted with the event creator
+      const chatPartners = await User.distinct('_id', {
+        $or: [
+          { 'messages.sender': creator._id },
+          { 'messages.receiver': creator._id }
+        ]
+      });
+
+      // Create notifications for each chat partner
+      const notifications = await Promise.all(
+        chatPartners.map(async (partnerId) => {
+          const notification = await Notification.create({
+            recipient: partnerId,
+            type: 'event_created',
+            title: 'New Event Posted',
+            message: `${creator.name} posted a new event: ${event.title}`,
+            metadata: {
+              eventId: event._id,
+              userId: creator._id
+            }
+          });
+
+          await notification.populate('metadata.userId', 'name');
+          await notification.populate('metadata.eventId', 'title');
+
+          // Emit socket event to each recipient's room
+          getIO().to(partnerId.toString()).emit('notification:new', {
+            ...notification.toObject(),
+            type: 'event_created'
+          });
+
+          return notification;
+        })
+      );
+
+      return notifications;
+    } catch (error) {
+      console.error('Error creating event notification:', error);
+    }
+  }
+
+  static async notifyServiceRequested({ professional, organizer, event }) {
+    try {
+      const notification = await Notification.create({
+        recipient: professional,
+        type: 'service_request',
+        title: 'New Service Request',
+        message: `You have a new service request for event: ${event.title}`,
+        metadata: {
+          eventId: event._id,
+          userId: organizer
+        }
+      });
+
+      await notification.populate('metadata.userId', 'name');
+      await notification.populate('metadata.eventId', 'title');
+
+      // Emit socket event to recipient's room
+      getIO().to(professional.toString()).emit('notification:new', {
+        ...notification.toObject(),
+        type: 'service_request'
+      });
+
+      return notification;
+    } catch (error) {
+      console.error('Error creating service request notification:', error);
+    }
+  }
+
+  static async notifyServiceAccepted({ organizer, professional, event }) {
+    try {
+      const notification = await Notification.create({
+        recipient: organizer,
+        type: 'service_accepted',
+        title: 'Service Request Accepted',
+        message: `Your service request for event "${event.title}" has been accepted`,
+        metadata: {
+          eventId: event._id,
+          userId: professional
+        }
+      });
+
+      await notification.populate('metadata.userId', 'name');
+      await notification.populate('metadata.eventId', 'title');
+
+      // Emit socket event to recipient's room
+      getIO().to(organizer.toString()).emit('notification:new', {
+        ...notification.toObject(),
+        type: 'service_accepted'
+      });
+
+      return notification;
+    } catch (error) {
+      console.error('Error creating service accepted notification:', error);
+    }
+  }
+
+  static async notifyServiceRejected({ organizer, professional, event }) {
+    try {
+      const notification = await Notification.create({
+        recipient: organizer,
+        type: 'service_rejected',
+        title: 'Service Request Rejected',
+        message: `Your service request for event "${event.title}" has been rejected`,
+        metadata: {
+          eventId: event._id,
+          userId: professional
+        }
+      });
+
+      await notification.populate('metadata.userId', 'name');
+      await notification.populate('metadata.eventId', 'title');
+
+      // Emit socket event to recipient's room
+      getIO().to(organizer.toString()).emit('notification:new', {
+        ...notification.toObject(),
+        type: 'service_rejected'
+      });
+
+      return notification;
+    } catch (error) {
+      console.error('Error creating service rejected notification:', error);
+    }
   }
 
   static async notifyEventUpdated(event) {
-    // Notify all professionals involved
-    const notifications = event.professionals.map(prof => 
-      this.createNotification(
-        prof.professional._id || prof.professional,
-        'event_updated',
-        'Event Updated',
-        `Event "${event.title}" has been updated`,
-        { eventId: event._id }
-      )
-    );
-    
-    // Also notify the organizer
-    notifications.push(
-      this.createNotification(
-        event.organizer._id || event.organizer,
-        'event_updated',
-        'Event Updated',
-        `Your event "${event.title}" has been updated`,
-        { eventId: event._id }
-      )
-    );
-    
-    return Promise.all(notifications);
+    try {
+      // Get all professionals involved in the event
+      const recipients = event.professionals.map(prof => prof.professional);
+
+      // Create notifications for each professional
+      const notifications = await Promise.all(
+        recipients.map(async (professionalId) => {
+          const notification = await Notification.create({
+            recipient: professionalId,
+            type: 'event_updated',
+            title: 'Event Updated',
+            message: `Event "${event.title}" has been updated`,
+            metadata: {
+              eventId: event._id,
+              userId: event.organizer
+            }
+          });
+
+          await notification.populate('metadata.userId', 'name');
+          await notification.populate('metadata.eventId', 'title');
+
+          // Emit socket event to each recipient's room
+          getIO().to(professionalId.toString()).emit('notification:new', {
+            ...notification.toObject(),
+            type: 'event_updated'
+          });
+
+          return notification;
+        })
+      );
+
+      return notifications;
+    } catch (error) {
+      console.error('Error creating event update notification:', error);
+    }
   }
 
-  // Service notifications
-  static async notifyServiceRequested(request) {
-    return this.createNotification(
-      request.professional._id || request.professional,
-      'service_request',
-      'New Service Request',
-      `You have a new service request for event "${request.event.title}"`,
-      { 
-        eventId: request.event._id,
-        userId: request.organizer._id || request.organizer
-      }
-    );
+  static async notifyHireRequested({ professional, organizer, event }) {
+    try {
+      const notification = await Notification.create({
+        recipient: professional,
+        type: 'hire_request',
+        title: 'New Hire Request',
+        message: `You have received a hire request for event: ${event.title}`,
+        metadata: {
+          eventId: event._id,
+          userId: organizer
+        }
+      });
+
+      await notification.populate('metadata.userId', 'name');
+      await notification.populate('metadata.eventId', 'title');
+
+      // Emit socket event to recipient's room
+      getIO().to(professional.toString()).emit('notification:new', {
+        ...notification.toObject(),
+        type: 'hire_request'
+      });
+
+      return notification;
+    } catch (error) {
+      console.error('Error creating hire request notification:', error);
+    }
   }
 
-  static async notifyServiceAccepted(request) {
-    return this.createNotification(
-      request.organizer._id || request.organizer,
-      'service_accepted',
-      'Service Request Accepted',
-      `Your service request for event "${request.event.title}" has been accepted`,
-      { 
-        eventId: request.event._id,
-        userId: request.professional._id || request.professional
-      }
-    );
+  static async notifyHireAccepted({ organizer, professional, event }) {
+    try {
+      const notification = await Notification.create({
+        recipient: organizer,
+        type: 'hire_accepted',
+        title: 'Hire Request Accepted',
+        message: `Your hire request for event "${event.title}" has been accepted`,
+        metadata: {
+          eventId: event._id,
+          userId: professional
+        }
+      });
+
+      await notification.populate('metadata.userId', 'name');
+      await notification.populate('metadata.eventId', 'title');
+
+      // Emit socket event to recipient's room
+      getIO().to(organizer.toString()).emit('notification:new', {
+        ...notification.toObject(),
+        type: 'hire_accepted'
+      });
+
+      return notification;
+    } catch (error) {
+      console.error('Error creating hire accepted notification:', error);
+    }
   }
 
-  static async notifyServiceRejected(request) {
-    return this.createNotification(
-      request.organizer._id || request.organizer,
-      'service_rejected',
-      'Service Request Rejected',
-      `Your service request for event "${request.event.title}" has been declined`,
-      { 
-        eventId: request.event._id,
-        userId: request.professional._id || request.professional
-      }
-    );
-  }
+  static async notifyHireRejected({ organizer, professional, event }) {
+    try {
+      const notification = await Notification.create({
+        recipient: organizer,
+        type: 'hire_rejected',
+        title: 'Hire Request Rejected',
+        message: `Your hire request for event "${event.title}" has been rejected`,
+        metadata: {
+          eventId: event._id,
+          userId: professional
+        }
+      });
 
-  // Professional notifications
-  static async notifyProfessionalJoined(event, professional) {
-    return this.createNotification(
-      event.organizer._id || event.organizer,
-      'professional_joined',
-      'Professional Joined',
-      `${professional.name} has joined your event "${event.title}"`,
-      { 
-        eventId: event._id,
-        userId: professional._id
-      }
-    );
-  }
+      await notification.populate('metadata.userId', 'name');
+      await notification.populate('metadata.eventId', 'title');
 
-  static async notifyProfessionalLeft(event, professional) {
-    return this.createNotification(
-      event.organizer._id || event.organizer,
-      'professional_left',
-      'Professional Left',
-      `${professional.name} has left your event "${event.title}"`,
-      { 
-        eventId: event._id,
-        userId: professional._id
-      }
-    );
-  }
+      // Emit socket event to recipient's room
+      getIO().to(organizer.toString()).emit('notification:new', {
+        ...notification.toObject(),
+        type: 'hire_rejected'
+      });
 
-  // Message notifications
-  static async notifyNewMessage(message) {
-    return this.createNotification(
-      message.receiver._id || message.receiver,
-      'message_received',
-      'New Message',
-      `You have a new message from ${message.sender.name}`,
-      { 
-        messageId: message._id,
-        userId: message.sender._id || message.sender
-      }
-    );
-  }
-
-  static async notifyPaymentReceived(payment) {
-    return this.createNotification(
-      payment.recipient._id || payment.recipient,
-      'payment_received',
-      'Payment Received',
-      `You received a payment of $${payment.amount} for event "${payment.event.title}"`,
-      { 
-        paymentId: payment._id,
-        eventId: payment.event._id,
-        amount: payment.amount
-      }
-    );
-  }
-
-  static async notifyPaymentSent(payment) {
-    return this.createNotification(
-      payment.sender._id || payment.sender,
-      'payment_sent',
-      'Payment Sent',
-      `Your payment of $${payment.amount} for event "${payment.event.title}" was sent`,
-      { 
-        paymentId: payment._id,
-        eventId: payment.event._id,
-        amount: payment.amount
-      }
-    );
-  }
-
-  static async notifyReviewReceived(review) {
-    return this.createNotification(
-      review.recipient._id || review.recipient,
-      'review_received',
-      'New Review',
-      `You received a ${review.rating}-star review from ${review.author.name}`,
-      { 
-        reviewId: review._id,
-        userId: review.author._id || review.author,
-        rating: review.rating
-      }
-    );
+      return notification;
+    } catch (error) {
+      console.error('Error creating hire rejected notification:', error);
+    }
   }
 }
 

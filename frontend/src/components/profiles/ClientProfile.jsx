@@ -2,8 +2,9 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Star, Plus, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
+import Avatar from '../../components/Avatar';
 
-const ClientProfile = ({ user }) => {
+const ClientProfile = ({ user, events }) => {
   const navigate = useNavigate();
 
   return (
@@ -21,14 +22,14 @@ const ClientProfile = ({ user }) => {
           </button>
         </div>
 
-        {user?.events?.length > 0 ? (
+        {events?.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {user.events.map((event) => (
+            {events.map((event) => (
               <div key={event._id} className="bg-gray-700 rounded-lg p-4">
                 <h3 className="text-lg font-medium text-white mb-2">{event.title}</h3>
                 <div className="text-gray-400 mb-2">
                   <CalendarIcon className="inline-block h-4 w-4 mr-1" />
-                  {format(new Date(event.date), 'MMMM d, yyyy')}
+                  {format(new Date(event.datetime), 'MMMM d, yyyy')}
                 </div>
                 <p className="text-gray-300 mb-4">{event.description}</p>
                 <div className="flex justify-between items-center">
@@ -65,11 +66,7 @@ const ClientProfile = ({ user }) => {
               <div key={review._id} className="bg-gray-700 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center space-x-3">
-                    <img
-                      src={review.professional.avatarUrl}
-                      alt={review.professional.name}
-                      className="h-10 w-10 rounded-full object-cover"
-                    />
+                    <Avatar user={review.professional} className="w-10 h-10" />
                     <div>
                       <p className="text-white font-medium">{review.professional.name}</p>
                       <p className="text-sm text-gray-400">
@@ -101,11 +98,7 @@ const ClientProfile = ({ user }) => {
             {user.favorites.map((professional) => (
               <div key={professional._id} className="bg-gray-700 rounded-lg p-4">
                 <div className="flex items-center space-x-4">
-                  <img
-                    src={professional.avatarUrl}
-                    alt={professional.name}
-                    className="h-16 w-16 rounded-full object-cover"
-                  />
+                  <Avatar user={professional} className="w-16 h-16" />
                   <div>
                     <h3 className="text-lg font-medium text-white">{professional.name}</h3>
                     <div className="flex items-center text-gray-400">
