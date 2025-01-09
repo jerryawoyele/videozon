@@ -19,15 +19,37 @@ export const getAllProfessionals = async (req, res) => {
 export const getProfessionalById = async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // First get the professional's basic info
     const professional = await User.findOne({ _id: id, role: 'professional' })
-      .select('name email avatar bio services rating reviews')
-      .populate('reviews.organizer', 'name avatar');
+      .select('name email avatar bio services rating');
 
     if (!professional) {
       return httpResponses.notFound(res, 'Professional not found');
     }
 
-    return successResponse(res, 200, 'Professional retrieved successfully', { professional });
+    // Get ratings and reviews from events
+    const events = await Event.find({
+      'professionals.professional': id,
+      'professionals.rating': { $exists: true }
+    })
+    .select('professionals.$ organizer datetime')
+    .populate('organizer', 'name avatar');
+
+    // Format the reviews
+    const reviews = events.map(event => ({
+      rating: event.professionals[0].rating,
+      review: event.professionals[0].review,
+      organizer: event.organizer,
+      date: event.datetime
+    }));
+
+    return successResponse(res, 200, 'Professional retrieved successfully', { 
+      professional: {
+        ...professional.toObject(),
+        reviews
+      }
+    });
   } catch (error) {
     logger.error('Get professional details error:', error);
     return httpResponses.serverError(res, 'Failed to fetch professional details');

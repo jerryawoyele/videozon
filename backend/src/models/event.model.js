@@ -69,11 +69,43 @@ const eventSchema = new mongoose.Schema({
   }],
   status: {
     type: String,
-    enum: ['active', 'cancelled', 'completed'],
+    enum: ['active', 'ongoing', 'concluded', 'cancelled'],
     default: 'active'
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+// Add virtual field for days to event
+eventSchema.virtual('daysToEvent').get(function() {
+  if (!this.datetime) return null;
+  const now = new Date();
+  const eventDate = new Date(this.datetime);
+  const diffTime = eventDate - now;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+});
+
+// Add pre-save middleware to update status based on event date
+eventSchema.pre('save', function(next) {
+  if (this.isModified('datetime') || this.isModified('status')) {
+    const now = new Date();
+    const eventDate = new Date(this.datetime);
+    const eventEndDate = new Date(eventDate.getTime() + (24 * 60 * 60 * 1000)); // Event end date (24 hours after start)
+
+    if (this.status !== 'cancelled') {
+      if (now >= eventDate && now < eventEndDate) {
+        this.status = 'ongoing';
+      } else if (now >= eventEndDate) {
+        this.status = 'concluded';
+      } else {
+        this.status = 'active';
+      }
+    }
+  }
+  next();
 });
 
 export default mongoose.model('Event', eventSchema); 

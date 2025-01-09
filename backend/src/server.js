@@ -10,6 +10,8 @@ import { handleMulterError } from './config/multer.js';
 import fs from 'fs';
 import apiRouter from './routes/api.js';
 import jwt from 'jsonwebtoken';
+import helmet from 'helmet';
+import { initializeSocket } from './config/socket.js';
 
 // Get directory name in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -30,28 +32,37 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Configure Content Security Policy
+// Configure Helmet with custom CSP
+const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
+const apiUrl = 'http://localhost:5000';
+
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'", apiUrl, `ws://${apiUrl.split('//')[1]}`],
+        imgSrc: ["'self'", 'data:', 'https://*.cloudinary.com', 'https://res.cloudinary.com', 'http://localhost:*'],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
+        connectSrc: ["'self'", frontendUrl, apiUrl, 'ws://localhost:*', 'wss://localhost:*'],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"]
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// Add middleware to verify headers
 app.use((req, res, next) => {
-  res.setHeader(
-    'Content-Security-Policy',
-    [
-      "default-src 'self' http://localhost:5000 ws://localhost:5000",
-      "img-src 'self' http://localhost:5000 https://ui-avatars.com https://res.cloudinary.com data:",
-      "style-src 'self' 'unsafe-inline'",
-      "connect-src 'self' http://localhost:5000 ws://localhost:5000"
-    ].join('; ')
-  );
+  const csp = res.getHeader('Content-Security-Policy');
   next();
 });
 
 // Configure Socket.IO
-const io = new Server(httpServer, {
-  cors: corsOptions,
-  transports: ['websocket', 'polling'],
-  allowEIO3: true,
-  pingTimeout: 60000,
-  pingInterval: 25000
-});
+const io = initializeSocket(httpServer);
 
 // Socket.IO authentication middleware
 io.use((socket, next) => {

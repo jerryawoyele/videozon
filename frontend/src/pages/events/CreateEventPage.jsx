@@ -105,7 +105,7 @@ const CreateEventPage = () => {
       });
 
       toast.success('Event created successfully');
-      navigate(`/events/${response.data.data.event._id}`);
+      navigate(`/events`);
     } catch (error) {
       console.error('Create event error:', error);
       toast.error(error.response?.data?.message || 'Failed to create event');
@@ -123,7 +123,7 @@ const CreateEventPage = () => {
             className="flex items-center text-gray-400 hover:text-white mb-6 transition-colors"
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
-            Back to Events
+            Back
           </button>
 
           <div className="flex justify-between items-center mb-6">

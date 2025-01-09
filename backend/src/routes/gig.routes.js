@@ -1,26 +1,16 @@
 import express from 'express';
-import { 
-  createGig, 
-  updateGig, 
-  deleteGig, 
-  getGig, 
-  listGigs,
-  searchGigs 
-} from '../controllers/gig.controller.js';
 import { authenticate } from '../middleware/auth.js';
-import { validateGig } from '../middleware/validation.js';
-import { upload } from '../middleware/upload.js';
+import { getGig, getGigsByProfessional, getGigsByClient } from '../controllers/gig.controller.js';
 
 const router = express.Router();
 
-router.get('/search', searchGigs);
-router.get('/:id', getGig);
-router.get('/', listGigs);
+// Get gigs where user is the professional
+router.get('/professional', authenticate, getGigsByProfessional);
 
-router.use(authenticate); // Protected routes below
+// Get gigs where user is the client
+router.get('/client', authenticate, getGigsByClient);
 
-router.post('/', upload.array('images', 5), validateGig, createGig);
-router.put('/:id', upload.array('images', 5), validateGig, updateGig);
-router.delete('/:id', deleteGig);
+// Get a specific gig by ID
+router.get('/:id', authenticate, getGig);
 
 export default router; 

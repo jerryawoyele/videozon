@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
-import { toast } from 'react-hot-toast';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 const ServiceOfferModal = ({ isOpen, onClose, event, availableServices }) => {
   const [selectedServices, setSelectedServices] = useState([]);
@@ -9,6 +9,16 @@ const ServiceOfferModal = ({ isOpen, onClose, event, availableServices }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
+
+  const handleServiceChange = (service) => {
+    setSelectedServices(prev => {
+      if (prev.includes(service)) {
+        return prev.filter(s => s !== service);
+      } else {
+        return [...prev, service];
+      }
+    });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,19 +29,21 @@ const ServiceOfferModal = ({ isOpen, onClose, event, availableServices }) => {
 
     setIsSubmitting(true);
     try {
-      await axios.post(`${import.meta.env.VITE_API_URL}/messages/service-request`, {
+      await axios.post(`${import.meta.env.VITE_API_URL}/messages/service-offer`, {
         receiverId: event.organizer._id,
         eventId: event._id,
-        service: selectedServices[0],
-        message: message
+        services: selectedServices,
+        content: message || `I would like to offer my services for your event: ${event.title}`,
+        type: 'service_offer'
       });
-
+      
       toast.success('Service offer sent successfully');
-      window.location.reload();
       onClose();
+      setSelectedServices([]);
+      setMessage('');
     } catch (error) {
       console.error('Service offer error:', error);
-      toast.error('Failed to send service offer');
+      toast.error(error.response?.data?.message || 'Failed to send service offer');
     } finally {
       setIsSubmitting(false);
     }
@@ -39,65 +51,67 @@ const ServiceOfferModal = ({ isOpen, onClose, event, availableServices }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-white">Offer Services</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <X className="h-6 w-6" />
-          </button>
+      <div className="bg-gray-800 rounded-lg w-full max-w-md mx-4">
+        <div className="p-4 border-b border-gray-700">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold text-white">Offer Services</h2>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {/* Event Info */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Available Services
+              Event
             </label>
-            <div className="space-y-2">
+            <div className="bg-gray-700 p-3 rounded-md">
+              <p className="text-white">{event.title}</p>
+              <p className="text-sm text-gray-400 mt-1">Organized by {event.organizer.name}</p>
+            </div>
+          </div>
+
+          {/* Services Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Select Services to Offer
+            </label>
+            <div className="grid grid-cols-2 gap-2">
               {availableServices.map((service) => (
-                <label
-                  key={service}
-                  className={`
-                    flex items-center p-3 rounded-md border-2 transition-colors cursor-pointer
-                    ${selectedServices.includes(service)
-                      ? 'border-blue-500 bg-blue-500/10'
-                      : 'border-gray-600 hover:border-gray-500 bg-gray-700'
-                    }
-                  `}
-                >
+                <label key={service} className="flex items-center space-x-2">
                   <input
                     type="checkbox"
-                    value={service}
                     checked={selectedServices.includes(service)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedServices([...selectedServices, service]);
-                      } else {
-                        setSelectedServices(selectedServices.filter(s => s !== service));
-                      }
-                    }}
-                    className="rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-700 mr-3"
+                    onChange={() => handleServiceChange(service)}
+                    className="form-checkbox h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 rounded"
                   />
-                  <span className="text-gray-300 capitalize">{service.replace('_', ' ')}</span>
+                  <span className="text-gray-300 capitalize">{service}</span>
                 </label>
               ))}
             </div>
           </div>
 
+          {/* Message */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Message to Organizer
+              Message (Optional)
             </label>
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              required
+              placeholder="Add a message to your service offer..."
               rows={4}
-              className="w-full bg-gray-700 border border-gray-600 rounded-md px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
-              placeholder="Describe your experience and why you'd be a great fit for this event..."
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
-          <div className="flex justify-end space-x-3">
+          {/* Submit Button */}
+          <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
               onClick={onClose}
@@ -107,8 +121,8 @@ const ServiceOfferModal = ({ isOpen, onClose, event, availableServices }) => {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              disabled={isSubmitting || selectedServices.length === 0}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Sending...' : 'Send Offer'}
             </button>

@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, Star, Settings } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Avatar from '../../components/Avatar';
 
 const ProfileHeader = ({ 
   user, 
@@ -29,11 +30,15 @@ const ProfileHeader = ({
     <div className="bg-gray-800 rounded-lg p-6 mb-6">
       <div className="flex items-start space-x-6">
         <div className="relative">
-          <img
-            src={formData.avatar ? URL.createObjectURL(formData.avatar) : user?.avatarUrl}
-            alt={user?.name}
-            className="h-24 w-24 rounded-full object-cover"
-          />
+          {isEditing && formData.avatar ? (
+            <img
+              src={URL.createObjectURL(formData.avatar)}
+              alt={user?.name}
+              className="h-24 w-24 rounded-full object-cover"
+            />
+          ) : (
+            <Avatar user={user} className="w-24 h-24" />
+          )}
           {isEditing && (
             <label className="absolute bottom-0 right-0 p-2 bg-gray-700 rounded-full cursor-pointer hover:bg-gray-600">
               <Camera className="h-4 w-4 text-gray-400" />
@@ -101,6 +106,7 @@ const ProfileHeader = ({
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full bg-gray-700 border border-gray-600 rounded-md px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+                    required
                   />
                 </div>
                 <div>

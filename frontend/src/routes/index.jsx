@@ -13,9 +13,12 @@ import EventDetailsPage from '../pages/events/EventDetailsPage';
 import CreateEventPage from '../pages/events/CreateEventPage';
 import ProfessionalsPage from '../pages/professionals/ProfessionalsPage';
 import ProfessionalProfilePage from '../pages/professionals/ProfessionalProfilePage';
-import MessagesPage from '../pages/messages/MessagesPage';
+import MessagesPage from '../pages/messages/MessagesPage';  
 import MessageDetailPage from '../pages/messages/MessageDetailPage';
-import NotificationsPage from '../pages/NotificationsPage';
+import NotificationsPage from '../pages/notifications/NotificationsPage';
+import GigsPage from '../pages/gigs/GigsPage';
+import GigPreviewPage from '../pages/gigs/GigPreviewPage';
+import PaymentPage from '../pages/payments/PaymentPage';
 import PrivateRoute from '../components/PrivateRoute';
 import Layout from '../components/Layout';
 
@@ -47,6 +50,18 @@ export const router = createBrowserRouter([
       {
         path: '/events/:id',
         element: <PrivateRoute><EventDetailsPage /></PrivateRoute>
+      },
+      {
+        path: '/gigs',
+        element: <PrivateRoute><GigsPage /></PrivateRoute>
+      },
+      {
+        path: '/gigs/:id/preview',
+        element: <PrivateRoute><GigPreviewPage /></PrivateRoute>
+      },
+      {
+        path: '/payments/:gigId',
+        element: <PrivateRoute><PaymentPage /></PrivateRoute>
       },
       {
         path: '/professionals',

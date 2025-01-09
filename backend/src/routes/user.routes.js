@@ -7,6 +7,7 @@ import {
   updateAvailability,
   getAvailability,
   addPortfolioItem,
+  getPortfolio,
   getProfile,
   updateProfile,
   updateUserStatus,
@@ -18,8 +19,10 @@ const router = express.Router();
 router.get('/professionals', validateToken, getProfessionals);
 router.get('/professionals/:id', validateToken, getProfessionalProfile);
 router.post('/availability', validateToken, updateAvailability);
+router.put('/availability', validateToken, updateAvailability);
 router.get('/availability', validateToken, getAvailability);
-router.post('/portfolio', validateToken, addPortfolioItem);
+router.get('/portfolio', validateToken, getPortfolio);
+router.post('/portfolio', validateToken, upload.single('image'), addPortfolioItem);
 router.get('/profile', validateToken, getProfile);
 router.put('/profile', validateToken, upload.single('avatar'), updateProfile);
 router.post('/status', validateToken, updateUserStatus);
