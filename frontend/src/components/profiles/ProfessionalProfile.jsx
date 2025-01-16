@@ -1,17 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Star, Plus, Clock, CalendarIcon, 
-  User, X, Upload, MessageSquare, ArrowRight, CheckCircle
+  User, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Calendar,
+  Settings,
+  ArrowRight,
+  MessageSquare,
+  CheckCircle,
+  Clock,
+  Star,
+  Edit,
+  Plus
 } from 'lucide-react';
 import { format } from 'date-fns';
-import Calendar from '../Calendar';
+import Calendarr from '../Calendar';
 import ReviewModal from '../ReviewModal';
 import { uploadImage } from '../../utils/imageUpload';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import DefaultAvatar from '../DefaultAvatar';
 import ServiceRequestModal from '../ServiceRequestModal';
+import { Settings as SettingsIcon } from 'lucide-react';
 
 const Avatar = ({ user, className = "w-10 h-10" }) => {
   const [imgError, setImgError] = useState(false);
@@ -88,9 +100,12 @@ export const ProfessionalProfile = ({
       const response = await axios.get(
         `${import.meta.env.VITE_API_URL}/messages/check-request/${professional._id}`
       );
-      setHasRequestedService(response.data.data.hasRequest);
+      if (response.data && response.data.success) {
+        setHasRequestedService(response.data.data.hasRequest);
+      }
     } catch (error) {
       console.error('Error checking existing requests:', error);
+      // Don't show error toast as this is a background check
     }
   };
 
@@ -212,7 +227,7 @@ export const ProfessionalProfile = ({
                     onClick={() => navigate('/settings')}
                     className="h-10 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 flex items-center"
                   >
-                    <Settings className="h-4 w-4 mr-2" />
+                    <SettingsIcon className="h-4 w-4 mr-2" />
                     Settings
                   </button>
                 ) : (
@@ -229,7 +244,7 @@ export const ProfessionalProfile = ({
                     {hasRequestedService ? (
                       <button
                         disabled
-                        className="h-10 max-md:h-16 px-4 py-2 bg-gray-600 text-white rounded-md flex items-center cursor-not-allowed"
+                        className="h-10 max-lg:h-16 px-4 py-2 bg-gray-600 text-white rounded-md flex items-center cursor-not-allowed"
                       >
                         <CheckCircle className="h-4 w-4 mr-2" />
                         Service Requested
@@ -237,9 +252,9 @@ export const ProfessionalProfile = ({
                     ) : (
                       <button
                         onClick={() => setShowRequestModal(true)}
-                        className="h-10 max-md:h-16 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
+                        className="h-10 max-lg:h-16 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
                       >
-                        <CalendarIcon className="h-4 w-4 mr-2" />
+                        <Calendar className="h-4 w-4 mr-2" />
                         Request Service
                       </button>
                     )}
@@ -273,7 +288,7 @@ export const ProfessionalProfile = ({
               <div key={event._id} className="bg-gray-700 rounded-lg p-4 hover:bg-gray-600 transition-colors">
                 <h3 className="text-lg font-medium text-white mb-2">{event.title}</h3>
                 <div className="text-gray-400 mb-2">
-                  <CalendarIcon className="inline-block h-4 w-4 mr-1" />
+                  <Calendar className="inline-block h-4 w-4 mr-1" />
                   {format(new Date(event.datetime), 'MMMM d, yyyy')}
                 </div>
                 <p className="text-gray-300 mb-4 line-clamp-2">{event.description}</p>
@@ -559,7 +574,7 @@ export const ProfessionalProfile = ({
 
             <div className="p-4 max-h-[calc(100vh-200px)] overflow-y-auto">
               <div className="space-y-4">
-                <Calendar
+                <Calendarr
                   selectedDates={selectedDates}
                   onChange={setSelectedDates}
                 />
@@ -611,3 +626,5 @@ export const ProfessionalProfile = ({
     </>
   );
 };
+
+export default ProfessionalProfile;

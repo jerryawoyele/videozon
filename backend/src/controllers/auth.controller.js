@@ -51,12 +51,12 @@ export const register = async (req, res) => {
       console.log('Verification email sent to:', email);
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
-      // Continue with registration even if email fails
     }
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful! Please check your email for verification.'
+      message: 'Registration successful! Please check your email for verification.',
+      redirectTo: '/verification-pending'
     });
 
   } catch (error) {
@@ -146,6 +146,14 @@ export const login = async (req, res) => {
 export const verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;
+    
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Verification token is required'
+      });
+    }
+
     console.log('Verification attempt with token:', token);
 
     // Verify token
@@ -178,9 +186,29 @@ export const verifyEmail = async (req, res) => {
 
     console.log('User verified successfully:', user.email);
 
+    // Generate auth token
+    const authToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+      expiresIn: '24h',
+    });
+
+    // Prepare user response without sensitive data
+    const userResponse = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      isVerified: user.isVerified,
+      avatar: user.avatar,
+      isNewUser: !user.profile
+    };
+
     res.status(200).json({
       success: true,
-      message: 'Email verified successfully'
+      message: 'Email verified successfully',
+      data: {
+        token: authToken,
+        user: userResponse
+      }
     });
 
   } catch (error) {

@@ -3,8 +3,8 @@ import Layout from '../../components/Layout';
 import axios from '../../utils/axios';
 import toast from 'react-hot-toast';
 import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
-import { 
-  User, MessageSquare, Trash2, 
+import {
+  User, MessageSquare, Trash2,
   CheckCircle, XCircle, Clock,
   Check, X
 } from 'lucide-react';
@@ -20,7 +20,7 @@ axios.interceptors.request.use(
       method: config.method,
       hasToken: !!token
     });
-    
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -67,7 +67,7 @@ const Avatar = ({ user, className = "w-10 h-10" }) => {
   }
 
   return (
-    <img 
+    <img
       src={user.avatar}
       alt={user.name}
       className={`${className} rounded-full object-cover`}
@@ -78,7 +78,7 @@ const Avatar = ({ user, className = "w-10 h-10" }) => {
 
 const formatLastSeen = (lastSeen) => {
   if (!lastSeen) return 'Offline';
-  
+
   try {
     const lastSeenDate = new Date(lastSeen);
     if (isNaN(lastSeenDate.getTime())) {
@@ -104,16 +104,15 @@ const ConversationCard = ({ conversation, isActive, onClick }) => {
   const lastMessage = conversation.lastMessage;
 
   return (
-    <div 
-      className={`flex items-start gap-3 p-4 cursor-pointer ${
-        isActive ? 'bg-gray-100' : ''
-      }`}
+    <div
+      className={`flex items-start gap-3 p-4 cursor-pointer ${isActive ? 'bg-gray-100' : ''
+        }`}
       onClick={onClick}
     >
       <div className="relative">
-        <img 
-          src={otherUser?.avatar?.url || '/default-avatar.png'} 
-          alt={otherUser?.name} 
+        <img
+          src={otherUser?.avatar?.url || '/default-avatar.png'}
+          alt={otherUser?.name}
           className="w-12 h-12 rounded-full object-cover"
         />
         {isUserOnline(otherUser?._id) && (
@@ -165,13 +164,13 @@ const MessagesPage = () => {
       navigate('/login');
       return;
     }
-    
+
     console.log('Current user:', {
       id: user._id,
       name: user.name,
       role: user.role
     });
-    
+
     // Initial fetch only
     fetchMessages();
   }, [user, navigate]);
@@ -179,14 +178,14 @@ const MessagesPage = () => {
   const fetchMessages = async () => {
     try {
       setIsLoading(true);
-      
+
       console.log('Fetching messages with user:', {
         id: user._id,
         token: localStorage.getItem('token')?.substring(0, 20) + '...'
       });
-      
+
       const response = await axios.get(`/messages`);
-      
+
       console.log('Response structure:', {
         status: response.status,
         hasData: !!response.data,
@@ -205,14 +204,14 @@ const MessagesPage = () => {
       }
 
       const messageData = {
-        conversations: Array.isArray(response.data.data.conversations) 
-          ? response.data.data.conversations 
+        conversations: Array.isArray(response.data.data.conversations)
+          ? response.data.data.conversations
           : [],
-        sentRequests: Array.isArray(response.data.data.sentRequests) 
-          ? response.data.data.sentRequests 
+        sentRequests: Array.isArray(response.data.data.sentRequests)
+          ? response.data.data.sentRequests
           : [],
-        receivedRequests: Array.isArray(response.data.data.receivedRequests) 
-          ? response.data.data.receivedRequests 
+        receivedRequests: Array.isArray(response.data.data.receivedRequests)
+          ? response.data.data.receivedRequests
           : []
       };
 
@@ -262,35 +261,30 @@ const MessagesPage = () => {
           return messages.conversations || [];
       }
     })();
-    
+
     console.log(`Current messages for tab ${activeTab}:`, currentMessages);
     return currentMessages;
   };
 
   const handleAcceptRequest = async (messageId) => {
-    console.log('Accepting request with messageId:', messageId);
     try {
-      const response = await axios.put(`/messages/${messageId}/accept-service-request`, {});
-      if (response.data.success) {
-        toast.success('Request accepted successfully');
-        fetchMessages(); // Refresh messages
-      }
+      await axios.put(`/messages/${messageId}/accept-service-offer`, {});
+      toast.success('Request accepted successfully');
+      fetchMessages(); // Refresh the messages list
     } catch (error) {
-      console.error('Accept request error:', error);
-      toast.error(error.response?.data?.message || 'Failed to accept request');
+      console.error('Error accepting request:', error);
+      toast.error('Failed to accept request');
     }
   };
 
-  const handleRejectRequest = async (messageId) => {
+  const handleDeclineRequest = async (messageId) => {
     try {
-      const response = await axios.put(`/messages/${messageId}/reject-service-request`, {});
-      if (response.data.success) {
-        toast.success('Request rejected successfully');
-        fetchMessages(); // Refresh messages
-      }
+      await axios.put(`/messages/${messageId}/reject-service-offer`, {});
+      toast.success('Request declined successfully');
+      fetchMessages(); // Refresh the messages list
     } catch (error) {
-      console.error('Reject request error:', error);
-      toast.error(error.response?.data?.message || 'Failed to reject request');
+      console.error('Error declining request:', error);
+      toast.error('Failed to decline request');
     }
   };
 
@@ -336,8 +330,8 @@ const MessagesPage = () => {
     return (
       <div className="flex items-center space-x-2">
         <p className="text-gray-300">
-          {message.content.length > 50 
-            ? `${message.content.substring(0, 50)}...` 
+          {message.content.length > 50
+            ? `${message.content.substring(0, 50)}...`
             : message.content}
         </p>
         {message.edited && (
@@ -349,9 +343,10 @@ const MessagesPage = () => {
 
   const renderMessageCard = (message) => {
     const partner = message.sender._id === user._id ? message.receiver : message.sender;
-    const isRequest = message.type === 'service_request';
+    // Check for both service_request and service_offer types
+    const isRequest = message.type === 'service_request' || message.type === 'service_offer';
 
-    // Use renderRequestCard for requests
+    // Use renderRequestCard for both types of requests
     if (isRequest) {
       return renderRequestCard(message, activeTab);
     }
@@ -364,7 +359,7 @@ const MessagesPage = () => {
         className="bg-gray-800 rounded-lg p-4 hover:bg-gray-700 transition-colors cursor-pointer"
       >
         <div className="flex items-start space-x-4">
-          <div 
+          <div
             className="relative flex-shrink-0 cursor-pointer"
             onClick={(e) => {
               e.stopPropagation();
@@ -372,16 +367,15 @@ const MessagesPage = () => {
             }}
           >
             <Avatar user={partner} />
-            <div 
-              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-gray-800 rounded-full ${
-                isUserOnline(partner?._id) ? 'bg-green-500' : 'bg-gray-500'
-              }`}
+            <div
+              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-gray-800 rounded-full ${isUserOnline(partner?._id) ? 'bg-green-500' : 'bg-gray-500'
+                }`}
             />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex justify-between items-start">
               <div>
-                <h3 
+                <h3
                   className="text-white font-medium hover:text-blue-400 cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -432,16 +426,15 @@ const MessagesPage = () => {
 
   const renderRequestCard = (request, type) => {
     const otherUser = type === 'sent' ? request.receiver : request.sender;
-    
+
     return (
-      <div 
-        key={request._id} 
-        className={`bg-gray-800 rounded-lg p-4 space-y-4 ${
-          type === 'received' && request.status === 'unread' ? 'bg-gray-700' : 'bg-gray-800'
-        }`}
+      <div
+        key={request._id}
+        className={`bg-gray-800 rounded-lg p-4 space-y-4 ${type === 'received' && request.status === 'unread' ? 'bg-gray-700' : 'bg-gray-800'
+          }`}
       >
         <div className="flex items-start space-x-4">
-          <div 
+          <div
             onClick={() => navigate(`/professionals/${otherUser._id}`)}
             className="cursor-pointer"
           >
@@ -450,7 +443,7 @@ const MessagesPage = () => {
           <div className="flex-1">
             <div className="flex justify-between items-start">
               <div>
-                <h3 
+                <h3
                   onClick={() => navigate(`/professionals/${otherUser._id}`)}
                   className="text-white font-medium hover:text-blue-400 cursor-pointer"
                 >
@@ -462,7 +455,7 @@ const MessagesPage = () => {
               </div>
               <div className="flex items-center space-x-2">
                 {type === 'received' ? (
-                  request.status !== 'accepted' && request.status !== 'rejected' ? (
+                  request.status === 'unread' ? (
                     <div className="flex space-x-2">
                       <button
                         onClick={(e) => {
@@ -477,10 +470,10 @@ const MessagesPage = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleRejectRequest(request._id);
+                          handleDeclineRequest(request._id);
                         }}
                         className="p-1 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                        title="Reject Request"
+                        title="Decline Request"
                       >
                         <X className="w-6 h-6" />
                       </button>
@@ -522,6 +515,65 @@ const MessagesPage = () => {
     );
   };
 
+  const renderReceivedRequests = () => {
+    return messages.receivedRequests.map((request) => (
+      <div key={request._id} className="bg-gray-800 rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Avatar user={request.sender} />
+            <div>
+              <h3 className="text-white font-medium">{request.sender.name}</h3>
+              <p className="text-sm text-gray-400">
+                {request.type === 'service_offer' ? 'Service Offer' : 'Service Request'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            {request.status === 'unread' && (
+              <>
+                <button
+                  onClick={() => handleAcceptRequest(request._id)}
+                  className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700"
+                >
+                  Accept
+                </button>
+                <button
+                  onClick={() => handleDeclineRequest(request._id)}
+                  className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700"
+                >
+                  Decline
+                </button>
+              </>
+            )}
+            {request.status !== 'unread' && (
+              <span className={`text-sm ${request.status === 'accepted'
+                  ? 'text-green-400'
+                  : request.status === 'rejected'
+                    ? 'text-red-400'
+                    : 'text-yellow-400'
+                }`}>
+                {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="text-gray-300">
+          <p>{request.content}</p>
+          {request.relatedEvent && (
+            <p className="text-sm text-gray-400 mt-1">
+              Event: {request.relatedEvent.title}
+            </p>
+          )}
+          {request.services && request.services.length > 0 && (
+            <p className="text-sm text-gray-400">
+              Services: {request.services.join(', ')}
+            </p>
+          )}
+        </div>
+      </div>
+    ));
+  };
+
   return (
     <Layout>
       <div className="flex-1 min-h-screen bg-gray-900 m-6">
@@ -530,11 +582,10 @@ const MessagesPage = () => {
           <div className="flex space-x-4 mb-6">
             <button
               onClick={() => setActiveTab('conversations')}
-              className={`px-4 py-2 rounded-md relative ${
-                activeTab === 'conversations'
+              className={`px-4 py-2 rounded-md relative ${activeTab === 'conversations'
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
+                }`}
             >
               Conversations
               {getUnreadCount('conversations') > 0 && (
@@ -545,21 +596,19 @@ const MessagesPage = () => {
             </button>
             <button
               onClick={() => setActiveTab('sent')}
-              className={`px-4 py-2 rounded-md ${
-                activeTab === 'sent'
+              className={`px-4 py-2 rounded-md ${activeTab === 'sent'
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
+                }`}
             >
               Sent Requests
             </button>
             <button
               onClick={() => setActiveTab('received')}
-              className={`px-4 py-2 rounded-md relative ${
-                activeTab === 'received'
+              className={`px-4 py-2 rounded-md relative ${activeTab === 'received'
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
+                }`}
             >
               Received Requests
               {getUnreadCount('received') > 0 && (

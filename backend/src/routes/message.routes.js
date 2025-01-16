@@ -21,7 +21,8 @@ import {
   acceptServiceMessage,
   rejectServiceMessage,
   acceptServiceOffer,
-  rejectServiceOffer
+  rejectServiceOffer,
+  markServiceOfferRead
 } from '../controllers/message.controller.js';
 
 const router = express.Router();
@@ -61,7 +62,7 @@ router.get('/:id/history', getMessageHistory);
 
 // Request actions
 router.get('/service-requests/:professionalId', getServiceRequests);
-router.get('/check-request/:professionalId/:eventId', checkRequest);
+router.get('/check-request/:professionalId/:eventId?', validateToken, checkRequest);
 router.put('/:messageId/accept-hire-request', acceptHireRequest);
 router.put('/:messageId/reject-hire-request', rejectHireRequest);
 router.put('/:messageId/accept-service-request', acceptServiceMessage);
@@ -77,5 +78,8 @@ router.post('/service-offer', createServiceOffer);
 router.get('/conversation/:partnerId', getConversationMessages);
 router.post('/:partnerId/reply', replyToMessage);
 router.put('/conversation/:partnerId/read', markConversationAsRead);
+
+// Mark service offer as read
+router.put('/:messageId/mark-service-offer-read', markServiceOfferRead);
 
 export default router;

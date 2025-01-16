@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import axios from '../../utils/axios';
@@ -50,12 +50,16 @@ const HireProfessionalPage = () => {
     agreeToTerms: false,
     agreeToEscrow: false,
   });
+  const [hasExistingRequest, setHasExistingRequest] = useState(false);
+  const [isContactOnly, setIsContactOnly] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setIsLoading(true);
         const [profResponse, eventsResponse] = await Promise.all([
-          axios.get(`/users/professionals/${id}`),
+          axios.get(`/professionals/${id}`),
           axios.get('/events')
         ]);
 
@@ -78,35 +82,41 @@ const HireProfessionalPage = () => {
     fetchData();
   }, [id]);
 
+  useEffect(() => {
+    const isContactRequest = location.state?.isContact || false;
+    setIsContactOnly(isContactRequest);
+  }, [location.state]);
+
   const handleEventChange = async (e) => {
     const selectedEventId = e.target.value;
     const selectedEvent = userEvents.find(event => event._id === selectedEventId);
     
     if (selectedEvent) {
-      // Check if there's already a hire request for this event
       try {
-        const response = await axios.get(`/messages/check-request/${id}/${selectedEventId}`);
+        // Check if there's already a hire request for this event
+        const response = await axios.get(`/messages/check-request/${professional._id}/${selectedEventId}`);
         if (response.data.success && response.data.data.hasRequest) {
-          toast.error('You already have a hire request for this event');
+          toast.error('You already have a pending hire request for this event');
           e.target.value = formData.eventId; // Reset to previous value
           return;
         }
+
+        const eventDate = new Date(selectedEvent.datetime);
+        setFormData(prev => ({
+          ...prev,
+          eventId: selectedEventId,
+          eventDate: format(eventDate, 'yyyy-MM-dd'),
+          eventTime: format(eventDate, 'HH:mm'),
+          location: selectedEvent.location || '',
+          specialRequirements: selectedEvent.specialRequirements || '',
+          price: selectedEvent.budget || '',
+          gigTitle: `${professional.services[0].charAt(0).toUpperCase() + professional.services[0].slice(1)} Service for ${selectedEvent.title}`,
+          description: `Hire request: Professional ${professional.services[0].charAt(0).toUpperCase() + professional.services[0].slice(1)} service for ${selectedEvent.title}`
+        }));
       } catch (error) {
         console.error('Error checking existing request:', error);
+        toast.error('Failed to check existing requests');
       }
-
-      const eventDate = new Date(selectedEvent.datetime);
-      setFormData(prev => ({
-        ...prev,
-        eventId: selectedEventId,
-        eventDate: format(eventDate, 'yyyy-MM-dd'),
-        eventTime: format(eventDate, 'HH:mm'),
-        location: selectedEvent.location || '',
-        specialRequirements: selectedEvent.specialRequirements || '',
-        price: selectedEvent.budget || '',
-        gigTitle: `${professional.services[0].charAt(0).toUpperCase() + professional.services[0].slice(1)} Service for ${selectedEvent.title}`,
-        description: `Hire request: Professional ${professional.services[0].charAt(0).toUpperCase() + professional.services[0].slice(1)} service for ${selectedEvent.title}`
-      }));
     }
   };
 
@@ -118,40 +128,73 @@ const HireProfessionalPage = () => {
     }));
   };
 
+  const validateForm = () => {
+    const errors = {};
+    
+    // Only validate services and message if not a contact-only request
+    if (!isContactOnly) {
+      if (!formData.selectedServices.length) {
+        errors.services = 'Please select at least one service';
+      }
+      if (!formData.description.trim()) {
+        errors.message = 'Please enter a message';
+      }
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      ...errors
+    }));
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.agreeToTerms || !formData.agreeToEscrow) {
-      toast.error('Please agree to the terms and escrow conditions');
-      return;
-    }
-
-    if (formData.selectedServices.length === 0) {
-      toast.error('Please select at least one service');
+    if (!validateForm()) {
+      toast.error('Please fill in all required fields');
       return;
     }
 
     try {
-      // Create a hire request message
-      const response = await axios.post('/messages', {
+      setIsSubmitting(true);
+      
+      const requestData = {
         receiverId: id,
+        type: isContactOnly ? 'message' : 'hire_request',
         content: formData.description,
-        type: 'hire_request',
-        services: formData.selectedServices, // Send as services array
-        eventId: formData.eventId,
-        status: 'unread',  
-        gigTitle: formData.gigTitle,
-        paymentMethod: formData.paymentMethod,
-        price: formData.price
-      });
+        // Only include services and event if not a contact-only request
+        ...((!isContactOnly && formData.selectedServices.length) && { services: formData.selectedServices }),
+        ...((!isContactOnly && formData.eventId) && { eventId: formData.eventId })
+      };
+
+      const response = await axios.post('/messages', requestData);
 
       if (response.data.success) {
-        toast.success('Hire request sent successfully');
-        navigate(`/messages/${id}`);
+        toast.success(isContactOnly ? 'Message sent successfully!' : 'Hire request sent successfully!');
+        navigate('/messages');
       }
     } catch (error) {
-      console.error('Error submitting hire request:', error);
-      toast.error(error.response?.data?.message || 'Failed to submit hire request');
+      console.error('Submit error:', error);
+      toast.error(error.response?.data?.message || 'Failed to send request');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const checkExistingRequest = async () => {
+    try {
+      const response = await axios.get(`/messages/check-request/${professional._id}/${formData.eventId}`);
+      if (response.data.success) {
+        setHasExistingRequest(response.data.data.hasRequest);
+        if (response.data.data.request) {
+          // You can use the request details here if needed
+          console.log('Existing request:', response.data.data.request);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking request:', error);
+      toast.error('Failed to check existing request');
     }
   };
 

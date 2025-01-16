@@ -62,7 +62,7 @@ const messageSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'rejected', 'read', 'unread'],
+    enum: ['unread', 'read', 'accepted', 'rejected'],
     default: 'unread'
   },
   parentMessage: {

@@ -13,7 +13,7 @@ import VerifyEmail from './pages/auth/VerifyEmail';
 import VerificationPending from './pages/auth/VerificationPending';
 
 // Main Pages
-import DashboardPage from './pages/DashboardPage';
+import DashboardPage from './pages/dashboard/DashboardPage';
 import EventsPage from './pages/events/EventsPage';
 import CreateEventPage from './pages/events/CreateEventPage';
 import EventDetailsPage from './pages/events/EventDetailsPage';

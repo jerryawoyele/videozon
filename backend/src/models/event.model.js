@@ -108,4 +108,9 @@ eventSchema.pre('save', function(next) {
   next();
 });
 
+// Add these indexes to your Event schema
+eventSchema.index({ organizer: 1, status: 1 });
+eventSchema.index({ 'professionals.professional': 1, status: 1 });
+eventSchema.index({ datetime: 1 });
+
 export default mongoose.model('Event', eventSchema); 

@@ -1,189 +1,54 @@
 import Notification from '../models/notification.model.js';
 import { successResponse, httpResponses } from '../utils/apiResponse.js';
-import logger from '../config/logger.js';
-
-export const getUnreadCount = async (req, res) => {
-  try {
-    const count = await Notification.countDocuments({
-      recipient: req.user._id,
-      read: false,
-      viewed: false
-    });
-
-    return successResponse(res, 200, 'Unread count retrieved successfully', { count });
-  } catch (error) {
-    logger.error('Get unread count error:', error);
-    return httpResponses.serverError(res, 'Failed to get unread count');
-  }
-};
+import mongoose from 'mongoose';
 
 export const getNotifications = async (req, res) => {
   try {
-    const { type, unread } = req.query;
-    
-    let query = { recipient: req.user._id };
+    const userId = req.user.id;
+    console.log('Fetching notifications for user:', userId);
 
-    // Add type filter
-    if (type) {
-      query.type = type;
-    }
-
-    // Add unread filter
-    if (unread === 'true') {
-      query.read = false;
-    }
-
-    // Mark all fetched notifications as viewed with retry logic
-    const maxRetries = 3;
-    let retries = 0;
-    let success = false;
-
-    while (!success && retries < maxRetries) {
-      try {
-        await Notification.updateMany(
-          { recipient: req.user._id, viewed: false },
-          { $set: { viewed: true } }
-        ).maxTimeMS(5000); // Set maximum execution time to 5 seconds
-        success = true;
-      } catch (error) {
-        retries++;
-        if (retries === maxRetries) {
-          logger.error('Failed to mark notifications as viewed after retries:', error);
-          // Continue without marking as viewed rather than failing the whole request
-          break;
-        }
-        // Wait before retrying (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000));
-      }
-    }
-
-    // Fetch notifications with timeout
-    const notifications = await Notification.find(query)
-      .populate('metadata.eventId', 'title datetime location')
-      .populate('metadata.messageId')
-      .populate('metadata.userId', 'name')
-      .populate('metadata.paymentId')
-      .populate('metadata.reviewId')
-      .sort({ createdAt: -1 })
-      .lean()
-      .maxTimeMS(5000); // Set maximum execution time to 5 seconds
-
-    // Format notifications with proper context
-    const formattedNotifications = notifications.map(notification => {
-      // If notification already has title and message, return as is
-      if (notification.title && notification.message) {
-        return notification;
-      }
-
-      const formattedNotification = { ...notification };
-      const userName = notification.metadata?.userId?.name || 'Someone';
-      const eventTitle = notification.metadata?.eventId?.title || 'an event';
-
-      try {
-        // Format based on type
-        switch (notification.type) {
-        // Event notifications
-        case 'event_created':
-          formattedNotification.title = 'New Event Created';
-          formattedNotification.message = `${userName} created a new event: ${eventTitle}`;
-          break;
-        case 'event_updated':
-          formattedNotification.title = 'Event Updated';
-          formattedNotification.message = `${eventTitle} has been updated`;
-          break;
-        case 'event_cancelled':
-          formattedNotification.title = 'Event Cancelled';
-          formattedNotification.message = `${eventTitle} has been cancelled`;
-          break;
-        case 'event_completed':
-          formattedNotification.title = 'Event Completed';
-          formattedNotification.message = `${eventTitle} has been marked as completed`;
-          break;
-
-        // Service notifications
-        case 'service_request':
-          formattedNotification.title = 'Service Request';
-          formattedNotification.message = `${userName} requested your services for ${eventTitle}`;
-          break;
-        case 'service_accepted':
-          formattedNotification.title = 'Service Request Accepted';
-          formattedNotification.message = `${userName} accepted your service request for ${eventTitle}`;
-          break;
-        case 'service_rejected':
-          formattedNotification.title = 'Service Request Rejected';
-          formattedNotification.message = `${userName} declined your service request for ${eventTitle}`;
-          break;
-
-        // Professional notifications
-        case 'professional_joined':
-          formattedNotification.title = 'Professional Joined';
-          formattedNotification.message = `${userName} joined ${eventTitle}`;
-          break;
-        case 'professional_left':
-          formattedNotification.title = 'Professional Left';
-          formattedNotification.message = `${userName} left ${eventTitle}`;
-          break;
-        case 'professional_reviewed':
-          formattedNotification.title = 'New Review';
-          formattedNotification.message = `${userName} left you a review for ${eventTitle}`;
-          break;
-
-        // Message notifications
-        case 'message_received':
-          formattedNotification.title = 'New Message';
-          formattedNotification.message = `You have a new message from ${userName}`;
-          break;
-        case 'message_request':
-          formattedNotification.title = 'New Message Request';
-          formattedNotification.message = `${userName} wants to start a conversation`;
-          break;
-
-        // Payment notifications
-        case 'payment_received':
-          formattedNotification.title = 'Payment Received';
-          formattedNotification.message = `You received a payment of $${notification.metadata?.amount || 0} for ${eventTitle}`;
-          break;
-        case 'payment_sent':
-          formattedNotification.title = 'Payment Sent';
-          formattedNotification.message = `Your payment of $${notification.metadata?.amount || 0} for ${eventTitle} was sent`;
-          break;
-        case 'payment_failed':
-          formattedNotification.title = 'Payment Failed';
-          formattedNotification.message = `Payment for ${eventTitle} failed. Please try again.`;
-          break;
-
-        // Review notifications
-        case 'review_received':
-          formattedNotification.title = 'New Review';
-          formattedNotification.message = `${userName} gave you a ${notification.metadata?.rating}-star review`;
-          break;
-
-        // System notifications
-        case 'system_update':
-          formattedNotification.title = 'System Update';
-          formattedNotification.message = notification.message;
-          break;
-        case 'account_update':
-          formattedNotification.title = 'Account Update';
-          formattedNotification.message = notification.message;
-          break;
-
-        default:
-          formattedNotification.title = 'Notification';
-          formattedNotification.message = notification.message;
-      }
-
-        return formattedNotification;
-      } catch (error) {
-        logger.error('Notification formatting error:', error);
-        // Return original notification if formatting fails
-        return notification;
-      }
+    console.log('Query filter:', {
+      recipient: new mongoose.Types.ObjectId(userId)
     });
 
-    return successResponse(res, 200, 'Notifications retrieved successfully', { notifications: formattedNotifications });
+    const notifications = await Notification.find({
+      recipient: new mongoose.Types.ObjectId(userId)
+    })
+      .populate('sender', 'name avatar')
+      .populate('relatedEvent', 'title datetime')
+      .sort({ createdAt: -1 });
+
+    notifications.forEach((notif, index) => {
+      console.log(`Notification ${index}:`, {
+        id: notif._id,
+        recipient: notif.recipient.toString(),
+        type: notif.type,
+        title: notif.title
+      });
+    });
+
+    const filteredNotifications = notifications.filter(notif => {
+      const isMatch = notif.recipient.toString() === userId;
+      if (!isMatch) {
+        console.log('Found mismatched notification:', {
+          notifRecipient: notif.recipient.toString(),
+          userId: userId,
+          title: notif.title
+        });
+      }
+      return isMatch;
+    });
+
+    console.log(`Found ${notifications.length} total notifications, ${filteredNotifications.length} after filtering`);
+
+    return successResponse(res, 200, 'Notifications retrieved successfully', {
+      notifications: filteredNotifications
+    });
   } catch (error) {
-    logger.error('Get notifications error:', error);
+    console.error('Get notifications error:', error, {
+      userId: req.user.id,
+      userObject: req.user
+    });
     return httpResponses.serverError(res, 'Failed to fetch notifications');
   }
 };
@@ -191,58 +56,97 @@ export const getNotifications = async (req, res) => {
 export const markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const notification = await Notification.findOne({
-      _id: id,
-      recipient: req.user._id
-    });
+    const userId = req.user.id;
+
+    const notification = await Notification.findOneAndUpdate(
+      { _id: id, recipient: userId },
+      { read: true },
+      { new: true }
+    );
 
     if (!notification) {
       return httpResponses.notFound(res, 'Notification not found');
     }
 
-    notification.read = true;
-    await notification.save();
-
     return successResponse(res, 200, 'Notification marked as read');
   } catch (error) {
-    logger.error('Mark notification as read error:', error);
+    console.error('Mark as read error:', error);
     return httpResponses.serverError(res, 'Failed to mark notification as read');
   }
 };
 
 export const markAllAsRead = async (req, res) => {
   try {
+    const userId = req.user.id;
+
     await Notification.updateMany(
-      { recipient: req.user._id, read: false },
-      { $set: { read: true } }
+      { recipient: userId, read: false },
+      { read: true }
     );
 
     return successResponse(res, 200, 'All notifications marked as read');
   } catch (error) {
-    logger.error('Mark all notifications as read error:', error);
-    return httpResponses.serverError(res, 'Failed to mark notifications as read');
+    console.error('Mark all as read error:', error);
+    return httpResponses.serverError(res, 'Failed to mark all notifications as read');
   }
 };
 
 export const deleteNotification = async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const notification = await Notification.findOne({
+    const userId = req.user.id;
+
+    const notification = await Notification.findOneAndDelete({
       _id: id,
-      recipient: req.user._id
+      recipient: userId
     });
 
     if (!notification) {
       return httpResponses.notFound(res, 'Notification not found');
     }
 
-    await notification.remove();
-
     return successResponse(res, 200, 'Notification deleted successfully');
   } catch (error) {
-    logger.error('Delete notification error:', error);
+    console.error('Delete notification error:', error);
     return httpResponses.serverError(res, 'Failed to delete notification');
+  }
+};
+
+export const getUnreadCount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const count = await Notification.countDocuments({
+      recipient: new mongoose.Types.ObjectId(userId),
+      read: false
+    });
+
+    return successResponse(res, 200, 'Unread count retrieved successfully', {
+      count
+    });
+  } catch (error) {
+    console.error('Get unread count error:', error);
+    return httpResponses.serverError(res, 'Failed to get unread count');
+  }
+};
+
+export const createNotification = async (data) => {
+  try {
+    const notification = new Notification({
+      recipient: data.recipient,
+      sender: data.sender,
+      type: data.type,
+      title: data.title,
+      message: data.message,
+      relatedEvent: data.eventId,
+      relatedMessage: data.messageId,
+      metadata: data.metadata || {}
+    });
+
+    await notification.save();
+    return notification;
+  } catch (error) {
+    console.error('Create notification error:', error);
+    throw error;
   }
 };

@@ -6,86 +6,57 @@ const notificationSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  sender: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
   type: {
     type: String,
+    required: true,
     enum: [
-      // Event related
-      'event_created',
-      'event_updated',
-      'event_cancelled',
-      'event_completed',
-      // Service related
       'service_request',
+      'service_offer',
+      'service_offer_accepted',
+      'service_offer_rejected',
       'service_accepted',
       'service_rejected',
-      // Hire related
-      'hire_request',
-      'hire_accepted',
-      'hire_rejected',
-      // Professional related
-      'professional_joined',
-      'professional_left',
-      'professional_reviewed',
-      // Message related
-      'message_received',
-      'message_request',
-      // Payment related
-      'payment_received',
-      'payment_sent',
-      'payment_failed',
-      // Review related
-      'review_received',
-      // System related
-      'system_update',
-      'account_update'
-    ],
-    required: true
+      'message',
+      'event_update',
+      'event_updated',
+      'payment',
+      'HIRE_REQUESTED',
+      'HIRE_ACCEPTED',
+      'MESSAGE'
+    ]
   },
   title: {
     type: String,
-    default: 'Notification'
+    required: true
   },
   message: {
     type: String,
-    default: ''
+    required: true
   },
-  link: String,
+  relatedEvent: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Event'
+  },
+  relatedMessage: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Message'
+  },
   read: {
     type: Boolean,
     default: false
-  },
-  viewed: {
-    type: Boolean,
-    default: false
-  },
-  metadata: {
-    eventId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Event'
-    },
-    messageId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Message'
-    },
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    paymentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Payment'
-    },
-    reviewId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Review'
-    },
-    amount: Number,
-    status: String,
-    rating: Number,
-    comment: String
   }
 }, {
   timestamps: true
 });
 
-export default mongoose.model('Notification', notificationSchema);
+// Index for faster queries
+notificationSchema.index({ recipient: 1, read: 1, createdAt: -1 });
+notificationSchema.index({ type: 1 });
+
+const Notification = mongoose.model('Notification', notificationSchema);
+
+export default Notification;

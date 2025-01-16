@@ -2,6 +2,7 @@ import User from '../models/user.model.js';
 import Event from '../models/event.model.js';
 import { successResponse, httpResponses } from '../utils/apiResponse.js';
 import logger from '../config/logger.js';
+import mongoose from 'mongoose';
 
 export const getAllProfessionals = async (req, res) => {
   try {
@@ -23,8 +24,9 @@ export const getProfessionalById = async (req, res) => {
     // First get the professional's basic info
     const professional = await User.findOne({ _id: id, role: 'professional' })
       .select('name email avatar bio services rating');
-
+    
     if (!professional) {
+      console.log('Professional not found');
       return httpResponses.notFound(res, 'Professional not found');
     }
 
@@ -187,5 +189,86 @@ export const deleteGig = async (req, res) => {
   } catch (error) {
     logger.error('Delete gig error:', error);
     return httpResponses.serverError(res, 'Failed to delete gig');
+  }
+};
+
+export const getProfessionals = async (req, res) => {
+  try {
+    const { 
+      services, 
+      search, 
+      rating, 
+      availability, 
+      location
+    } = req.query;
+
+    // Log current user info
+    console.log('Current user:', {
+      id: req.user.id,
+      role: req.user.role,
+      name: req.user.name
+    });
+
+    // Simple query to exclude current user
+    const query = { 
+      role: 'professional',
+      _id: { $ne: req.user.id }
+    };
+
+    // Add other filters
+    if (services && services !== '') {
+      query.services = services;
+    }
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { bio: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (rating) {
+      query.rating = { $gte: parseFloat(rating) };
+    }
+
+    if (availability) {
+      query.availability = availability;
+    }
+
+    if (location) {
+      query.location = { $regex: location, $options: 'i' };
+    }
+
+    console.log('Query:', JSON.stringify(query, null, 2));
+
+    let professionals = await User.find(query)
+      .select('name avatar bio services rating availability location reviews')
+      .sort({ rating: -1 });
+
+    // Manual filter to ensure current user is excluded
+    professionals = professionals.filter(prof => 
+      prof._id.toString() !== req.user.id.toString()
+    );
+
+    console.log('Professionals after filtering:', professionals.map(p => ({
+      id: p._id.toString(),
+      name: p.name,
+      isCurrentUser: p._id.toString() === req.user.id.toString()
+    })));
+
+    return res.status(200).json({
+      success: true,
+      message: 'Professionals retrieved successfully',
+      data: {
+        professionals
+      }
+    });
+  } catch (error) {
+    console.error('Get professionals error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch professionals',
+      error: error.message
+    });
   }
 };

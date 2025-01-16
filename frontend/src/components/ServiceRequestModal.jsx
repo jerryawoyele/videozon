@@ -48,22 +48,25 @@ const ServiceRequestModal = ({ isOpen, onClose, professional, userEvents, onRequ
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!requestData.eventId || !requestData.services?.length) return;
+    if (!requestData.eventId || requestData.services.length === 0) {
+      toast.error('Please select an event and at least one service');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_URL}/messages/service-request`, {
+      const selectedEvent = availableEvents.find(event => event._id === requestData.eventId);
+      
+      await axios.post(`${import.meta.env.VITE_API_URL}/messages/service-request`, {
         receiverId: professional._id,
         eventId: requestData.eventId,
         services: requestData.services,
-        message: requestData.message
+        message: requestData.message || `Request for ${requestData.services.join(', ')} services for event: ${selectedEvent?.title}`,
       });
 
-      if (response.data.success) {
-        toast.success('Service request sent successfully');
-        onRequestSent?.();
-        onClose();
-      }
+      toast.success('Service request sent successfully');
+      onClose();
+      if (onRequestSent) onRequestSent();
     } catch (error) {
       console.error('Service request error:', error);
       toast.error(error.response?.data?.message || 'Failed to send service request');
@@ -138,24 +141,7 @@ const ServiceRequestModal = ({ isOpen, onClose, professional, userEvents, onRequ
                   {event.title} - {formatEventDate(event.datetime)}
                 </option>
               ))}
-              {userEvents?.filter(event => 
-                existingRequests.some(request => request.relatedEvent?._id === event._id)
-              ).map((event) => (
-                <option key={event._id} value={event._id} disabled className="text-gray-500">
-                  {event.title} - {formatEventDate(event.datetime)} (Request Sent)
-                </option>
-              ))}
             </select>
-            {userEvents?.length === 0 && (
-              <p className="text-yellow-400 text-sm mt-1">
-                You don't have any active events. Please create an event first.
-              </p>
-            )}
-            {userEvents?.length > 0 && availableEvents.length === 0 && (
-              <p className="text-yellow-400 text-sm mt-1">
-                You have already sent service requests for all your events.
-              </p>
-            )}
           </div>
 
           <div>
@@ -164,30 +150,25 @@ const ServiceRequestModal = ({ isOpen, onClose, professional, userEvents, onRequ
             </label>
             <div className="space-y-2">
               {professional?.services?.map((service) => (
-                <label key={service} className="flex items-center space-x-3 p-2 bg-gray-700 rounded-md hover:bg-gray-600">
+                <label key={service} className="flex items-center space-x-3">
                   <input
                     type="checkbox"
-                    checked={requestData.services?.includes(service)}
+                    checked={requestData.services.includes(service)}
                     onChange={(e) => {
                       const isChecked = e.target.checked;
                       setRequestData(prev => ({
                         ...prev,
                         services: isChecked
-                          ? [...(prev.services || []), service]
-                          : (prev.services || []).filter(s => s !== service)
+                          ? [...prev.services, service]
+                          : prev.services.filter(s => s !== service)
                       }));
                     }}
-                    className="h-4 w-4 text-blue-600 rounded border-gray-500 bg-gray-700 focus:ring-blue-500 focus:ring-offset-gray-800"
+                    className="form-checkbox"
                   />
-                  <span className="text-white">
-                    {service.charAt(0).toUpperCase() + service.slice(1)}
-                  </span>
+                  <span className="text-white">{service}</span>
                 </label>
               ))}
             </div>
-            {requestData.services?.length === 0 && (
-              <p className="text-red-400 text-sm mt-1">Please select at least one service</p>
-            )}
           </div>
 
           <div>
@@ -197,24 +178,23 @@ const ServiceRequestModal = ({ isOpen, onClose, professional, userEvents, onRequ
             <textarea
               value={requestData.message}
               onChange={(e) => setRequestData(prev => ({ ...prev, message: e.target.value }))}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white"
               rows={3}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Add any specific requirements or notes..."
             />
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className="flex justify-end space-x-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600"
+              className="px-4 py-2 bg-gray-700 text-white rounded-md"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={!requestData.eventId || !requestData.services?.length || isSubmitting}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSubmitting || !requestData.eventId || requestData.services.length === 0}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md"
             >
               {isSubmitting ? 'Sending...' : 'Send Request'}
             </button>

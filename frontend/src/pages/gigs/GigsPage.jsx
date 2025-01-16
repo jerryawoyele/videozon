@@ -13,9 +13,10 @@ import { useAuth } from '../../context/AuthContext';
 const GigsPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isProfessional = user?.role === 'professional';
   const [gigs, setGigs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('my-gigs');
+  const [activeTab, setActiveTab] = useState(isProfessional ? 'my-gigs' : 'assigned-gigs');
   const [stats, setStats] = useState({
     totalActive: 0,
     completed: 0,
@@ -290,27 +291,21 @@ const GigsPage = () => {
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-gray-800 p-6 rounded-lg">
-            {activeTab === 'assigned-gigs' ? (
-              <h3 className="text-lg font-semibold text-white mb-2">Assigned Active Gigs</h3>
-            ) : (
-              <h3 className="text-lg font-semibold text-white mb-2">My Active Gigs</h3>
-            )}
+            <h3 className="text-lg font-semibold text-white mb-2">
+              {isProfessional ? 'My Active Gigs' : 'Assigned Active Gigs'}
+            </h3>
             <p className="text-3xl font-bold text-blue-500">{stats.totalActive}</p>
           </div>
           <div className="bg-gray-800 p-6 rounded-lg">
-            {activeTab === 'assigned-gigs' ? (
-              <h3 className="text-lg font-semibold text-white mb-2">Assigned Completed Gigs</h3>
-            ) : (
-              <h3 className="text-lg font-semibold text-white mb-2">My Completed Gigs</h3>
-            )}
+            <h3 className="text-lg font-semibold text-white mb-2">
+              {isProfessional ? 'My Completed Gigs' : 'Assigned Completed Gigs'}
+            </h3>
             <p className="text-3xl font-bold text-green-500">{stats.completed}</p>
           </div>
           <div className="bg-gray-800 p-6 rounded-lg">
-            {activeTab === 'assigned-gigs' ? (
-              <h3 className="text-lg font-semibold text-white mb-2">Assigned Pending Payments</h3>
-            ) : (
-              <h3 className="text-lg font-semibold text-white mb-2">My Pending Payments</h3>
-            )}
+            <h3 className="text-lg font-semibold text-white mb-2">
+              {isProfessional ? 'My Pending Payments' : 'Assigned Pending Payments'}
+            </h3>
             <p className="text-3xl font-bold text-yellow-500">₦{stats.pendingPayments.toLocaleString()}</p>
           </div>
         </div>
@@ -351,28 +346,30 @@ const GigsPage = () => {
         </div>
 
         {/* Tabs Navigation */}
-        <div className="flex justify-center space-x-1 bg-gray-800 p-1 rounded-lg mb-6 max-w-fit mx-auto">
-          <button
-            onClick={() => setActiveTab('my-gigs')}
-            className={`py-2.5 px-6 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'my-gigs'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
-            }`}
-          >
-            My Gigs
-          </button>
-          <button
-            onClick={() => setActiveTab('assigned-gigs')}
-            className={`py-2.5 px-6 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'assigned-gigs'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
-            }`}
-          >
-            Assigned Gigs
-          </button>
-        </div>
+        {isProfessional && (
+          <div className="flex justify-center space-x-1 bg-gray-800 p-1 rounded-lg mb-6 max-w-fit mx-auto">
+            <button
+              onClick={() => setActiveTab('my-gigs')}
+              className={`py-2.5 px-6 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'my-gigs'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              My Gigs
+            </button>
+            <button
+              onClick={() => setActiveTab('assigned-gigs')}
+              className={`py-2.5 px-6 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'assigned-gigs'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              Assigned Gigs
+            </button>
+          </div>
+        )}
 
         {/* Gigs List */}
         <div className="space-y-6">
@@ -486,16 +483,22 @@ const GigsPage = () => {
               <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-white mb-2">No Gigs Found</h3>
               <p className="text-gray-400 mb-4">
-                {gigs.length === 0 
-                  ? "You haven't secured any gigs yet. Check the Events Page to find opportunities!"
-                  : "No gigs match your current filters. Try adjusting them to see more results."}
+                {gigs.length === 0 ? (
+                  isProfessional ? (
+                    "You haven't secured any gigs yet. Check the Events Page to find opportunities!"
+                  ) : (
+                    "You haven't assigned any gigs yet. Hire professionals for your events to see them here!"
+                  )
+                ) : (
+                  "No gigs match your current filters. Try adjusting them to see more results."
+                )}
               </p>
               {gigs.length === 0 && (
                 <button
-                  onClick={() => navigate('/events')}
+                  onClick={() => navigate(isProfessional ? '/events' : '/professionals')}
                   className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                 >
-                  Browse Events
+                  {isProfessional ? 'Browse Events' : 'Browse Professionals'}
                 </button>
               )}
             </div>

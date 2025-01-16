@@ -5,6 +5,8 @@ import NotificationService from '../services/notification.service.js';
 import User from '../models/user.model.js';
 import Event from '../models/event.model.js';
 import Gig from '../models/gig.model.js';
+import Notification from '../models/notification.model.js';
+import mongoose from 'mongoose';
 
 export const getMessages = async (req, res) => {
   try {
@@ -25,14 +27,18 @@ export const getMessages = async (req, res) => {
     const conversationsMap = new Map();
     const unreadConversationsCount = new Set();
 
-    // Filter sent and received requests
+    // Filter sent and received requests - include service_offer type
     const sentRequests = allMessages.filter(msg =>
-      (msg.type === 'service_request' || msg.type === 'hire_request') &&
+      (msg.type === 'service_request' || 
+       msg.type === 'hire_request' || 
+       msg.type === 'service_offer') &&
       msg.sender._id.toString() === userId
     );
 
     const receivedRequests = allMessages.filter(msg =>
-      (msg.type === 'service_request' || msg.type === 'hire_request') &&
+      (msg.type === 'service_request' || 
+       msg.type === 'hire_request' || 
+       msg.type === 'service_offer') &&
       msg.receiver._id.toString() === userId
     );
 
@@ -106,7 +112,7 @@ export const getSentRequests = async (req, res) => {
     const userId = req.user.id;
     const requests = await Message.find({
       sender: userId,
-      type: { $in: ['service_request', 'service_offer'] },
+      type: { $in: ['service_request', 'service_offer', 'hire_request'] },
       isDeleted: false
     })
       .populate('receiver', 'name avatar')
@@ -125,7 +131,7 @@ export const getReceivedRequests = async (req, res) => {
     const userId = req.user.id;
     const requests = await Message.find({
       receiver: userId,
-      type: { $in: ['service_request', 'service_offer'] },
+      type: { $in: ['service_request', 'service_offer', 'hire_request'] },
       isDeleted: false
     })
       .populate('sender', 'name avatar')
@@ -430,17 +436,24 @@ export const rejectHireRequest = async (req, res) => {
 
 export const createServiceRequest = async (req, res) => {
   try {
-    const { receiverId, eventId, services = [], content } = req.body;
+    const { receiverId, eventId, services = [], message } = req.body;
     const userId = req.user.id;
+
+    // Validate required fields
+    if (!receiverId || !eventId || !services.length || !message) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields'
+      });
+    }
 
     // Create a conversation message for the service request
     const messageDoc = new Message({
       sender: userId,
       receiver: receiverId,
-      content: content,
+      content: message || `Request for ${services.join(', ')} services`,
       type: 'service_request',
       relatedEvent: eventId,
-      service: services[0], // For backward compatibility, use the first service
       services: services,
       status: 'unread'
     });
@@ -451,9 +464,10 @@ export const createServiceRequest = async (req, res) => {
 
     // Create notification for the service request
     await NotificationService.notifyServiceRequested({
-      professional: receiverId,
-      organizer: userId,
-      event: eventId
+      professional: receiverId,    // The professional receiving the request
+      organizer: userId,          // The organizer (current user) sending the request
+      event: eventId,             // The event ID
+      message: message            // Optional message
     });
 
     return successResponse(res, 201, 'Service request sent successfully');
@@ -465,25 +479,76 @@ export const createServiceRequest = async (req, res) => {
 
 export const createServiceOffer = async (req, res) => {
   try {
-    const { receiverId, eventId, service, message } = req.body;
+    const { receiverId, eventId, services, content, type } = req.body;
     const userId = req.user.id;
 
-    const serviceOffer = new Message({
+    // Validate required fields
+    if (!receiverId || !eventId || !services || !Array.isArray(services)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields'
+      });
+    }
+
+    // Get event details
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: 'Event not found'
+      });
+    }
+
+    // Create the message
+    const message = new Message({
       sender: userId,
       receiver: receiverId,
-      content: message,
-      type: 'service_offer',
-      event: eventId,
-      service,
-      status: 'pending'
+      content: content,
+      type: type || 'service_offer',
+      relatedEvent: eventId,
+      services: services,
+      status: 'unread'
     });
 
-    await serviceOffer.save();
+    await message.save();
 
-    return successResponse(res, 201, 'Service offer sent successfully');
+    // Create notification for the receiver
+    const notification = new Notification({
+      recipient: receiverId,
+      type: type || 'service_offer',
+      title: 'New Service Offer',
+      message: `New service offer for event: ${event.title}`,
+      relatedEvent: eventId,
+      relatedMessage: message._id,
+      sender: userId,
+      read: false
+    });
+
+    await notification.save();
+
+    // Populate sender and receiver details
+    await message.populate([
+      { path: 'sender', select: 'name email avatar role' },
+      { path: 'receiver', select: 'name email avatar role' },
+      { path: 'relatedEvent', select: 'title description datetime location' }
+    ]);
+
+    return res.status(201).json({
+      success: true,
+      message: `${type === 'service_offer' ? 'Service offer' : 'Service request'} sent successfully`,
+      data: { 
+        message,
+        eventId  // Add eventId to the response
+      }
+    });
+
   } catch (error) {
-    logger.error('Create service offer error:', error);
-    return httpResponses.serverError(res, 'Failed to create service offer');
+    console.error('Create service offer error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to create service offer',
+      error: error.message
+    });
   }
 };
 
@@ -498,15 +563,20 @@ export const getConversationMessages = async (req, res) => {
       return httpResponses.notFound(res, 'User not found');
     }
 
-    // Then get all messages between the users
+    // Then get all messages between these two specific users only
     const messages = await Message.find({
-      $or: [
-        { sender: userId, receiver: partnerId },
-        { sender: partnerId, receiver: userId }
-      ],
-      $or: [
-        { type: 'message' },
-        { type: 'hire_request' }
+      $and: [
+        // Messages must be between these two users specifically
+        {
+          $or: [
+            { sender: userId, receiver: partnerId },
+            { sender: partnerId, receiver: userId }
+          ]
+        },
+        // Messages must be either regular messages or hire requests
+        {
+          type: { $in: ['message', 'hire_request'] }
+        }
       ]
     })
       .populate('sender', 'name avatar isOnline lastSeen role')
@@ -593,10 +663,10 @@ export const markConversationAsRead = async (req, res) => {
         receiver: userId,
         status: 'unread',
         // type: { $ne: 'hire_request' },  // Exclude hire request messages
-        $or: [
-          { service: { $exists: false } },  // Regular messages
-          { relatedEvent: { $exists: false } }  // Messages without events
-        ]
+        // $or: [
+        //   { service: { $exists: false } },  // Regular messages
+        //   { relatedEvent: { $exists: false } }  // Messages without events
+        // ]
       },
       {
         $set: { status: 'read' }
@@ -614,20 +684,37 @@ export const markConversationAsRead = async (req, res) => {
 
 export const checkRequest = async (req, res) => {
   try {
-    const userId = req.user.id;
     const { professionalId, eventId } = req.params;
+    const userId = req.user.id;
 
-    // Check for any hire request between the users for this event
-    const request = await Message.findOne({
-      sender: userId,
-      receiver: professionalId,
-      relatedEvent: eventId,
-      type: 'hire_request',
-      isDeleted: false
+    console.log('Checking hire request:', {
+      professionalId,
+      eventId,
+      userId
     });
 
-    return successResponse(res, 200, 'Request check successful', {
-      hasRequest: !!request
+    // Build the query to check for hire requests
+    const query = {
+      $and: [
+        {
+          sender: userId,
+          receiver: professionalId,
+          type: 'hire_request',  // Changed from service_request to hire_request
+          relatedEvent: eventId
+        }
+      ]
+    };
+
+    const existingRequest = await Message.findOne(query)
+      .populate('relatedEvent', 'title')
+      .populate('sender', 'name')
+      .populate('receiver', 'name');
+
+    console.log('Found hire request:', existingRequest);
+
+    return successResponse(res, 200, 'Request check completed', {
+      hasRequest: !!existingRequest,
+      request: existingRequest
     });
   } catch (error) {
     logger.error('Check request error:', error);
@@ -904,10 +991,6 @@ export const acceptServiceOffer = async (req, res) => {
       event: message.relatedEvent
     });
 
-    // Move the message to conversations
-    message.type = 'message';
-    await message.save();
-
     return successResponse(res, 200, 'Service offer accepted successfully', { message });
   } catch (error) {
     logger.error('Accept service offer error:', error);
@@ -949,5 +1032,40 @@ export const rejectServiceOffer = async (req, res) => {
   } catch (error) {
     logger.error('Reject service offer error:', error);
     return httpResponses.serverError(res, 'Failed to reject service offer');
+  }
+};
+
+export const markServiceOfferRead = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+
+    console.log('Marking service offer as read:', {
+      messageId,
+      userId
+    });
+
+    const message = await Message.findOne({
+      _id: messageId,
+      receiver: userId,
+      type: 'message',
+      status: 'unread'
+    });
+
+    console.log('Found message:', message);
+
+    if (!message) {
+      console.log('Service offer not found or already read');
+      return httpResponses.notFound(res, 'Service offer not found');
+    }
+
+    message.status = 'read';
+    await message.save();
+    console.log('Message marked as read successfully');
+
+    return successResponse(res, 200, 'Service offer marked as read');
+  } catch (error) {
+    console.error('Mark service offer read error:', error);
+    return httpResponses.serverError(res, 'Failed to mark service offer as read');
   }
 };

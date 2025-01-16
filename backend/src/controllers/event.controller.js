@@ -2,22 +2,52 @@ import Event from '../models/event.model.js';
 import { successResponse, httpResponses } from '../utils/apiResponse.js';
 import logger from '../config/logger.js';
 import NotificationService from '../services/notification.service.js';
+import User from '../models/user.model.js';
 
 export const createEvent = async (req, res) => {
   try {
+    const eventData = JSON.parse(req.body.eventData);
     const userId = req.user.id;
-    const eventData = { ...req.body, organizer: userId };
-    
-    const event = new Event(eventData);
-    await event.save();
-    await event.populate('organizer', 'name');
 
-    // Notify chat partners about the new event
-    await NotificationService.notifyNewEvent(event, req.user);
+    // Create the event
+    const event = new Event({
+      ...eventData,
+      organizer: userId
+    });
+
+    await event.save();
+    await event.populate('organizer', 'name'); // Populate organizer details
+
+    // Create notifications for professionals if services are specified
+    if (eventData.services && eventData.services.length > 0) {
+      const professionals = await User.find({
+        role: 'professional',
+        services: { $in: eventData.services }
+      });
+
+      // Create notifications for each relevant professional
+      for (const professional of professionals) {
+        await NotificationService.create({
+          recipient: professional._id,
+          sender: userId,
+          type: 'event_created',
+          title: 'New Event Available',
+          message: `New event "${event.title}" by ${event.organizer.name} requires ${eventData.services.join(', ')}`,
+          eventId: event._id,
+          metadata: {
+            services: eventData.services,
+            eventTitle: event.title,
+            budget: event.budget,
+            location: event.location,
+            datetime: event.datetime
+          }
+        });
+      }
+    }
 
     return successResponse(res, 201, 'Event created successfully', { event });
   } catch (error) {
-    logger.error('Create event error:', error);
+    console.error('Create event error:', error);
     return httpResponses.serverError(res, 'Failed to create event');
   }
 };

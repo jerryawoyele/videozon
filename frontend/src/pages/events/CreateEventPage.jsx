@@ -41,6 +41,22 @@ const CreateEventPage = () => {
     services: []
   });
 
+  const formatBudget = (value) => {
+    const number = value.replace(/,/g, '');
+    return number.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  };
+
+  const handleBudgetChange = (e) => {
+    const rawValue = e.target.value.replace(/,/g, '');
+    
+    if (rawValue === '' || /^\d*\.?\d{0,2}$/.test(rawValue)) {
+      setFormData(prev => ({
+        ...prev,
+        budget: rawValue
+      }));
+    }
+  };
+
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
     const newImageFiles = [...imageFiles];
@@ -79,14 +95,20 @@ const CreateEventPage = () => {
     setIsLoading(true);
 
     try {
+      // Remove commas from budget before sending
+      const submitData = {
+        ...formData,
+        budget: formData.budget.replace(/,/g, '')
+      };
+
       // Create event data
       const eventData = {
-        ...formData,
+        ...submitData,
         organizer: user.id,
-        attendees: parseInt(formData.attendees),
-        budget: parseFloat(formData.budget),
+        attendees: parseInt(submitData.attendees),
+        budget: parseFloat(submitData.budget),
         services: selectedServices,
-        datetime: new Date(formData.datetime).toISOString()
+        datetime: new Date(submitData.datetime).toISOString()
       };
 
       // Create form data
@@ -198,6 +220,9 @@ const CreateEventPage = () => {
                     onChange={(e) => setFormData({ ...formData, datetime: e.target.value })}
                     className="w-full bg-gray-700 border border-gray-600 rounded-md px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
                   />
+                  <p className="mt-1 text-sm text-gray-400">
+                    Note: the month comes first, then the day, then the year, then the time.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -230,16 +255,22 @@ const CreateEventPage = () => {
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Budget
                   </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="0.01"
-                    value={formData.budget}
-                    onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-md px-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
-                    placeholder="Event budget"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                      ₦
+                    </span>
+                    <input
+                      type="text"
+                      required
+                      value={formData.budget ? formatBudget(formData.budget.toString()) : ''}
+                      onChange={handleBudgetChange}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-md pl-7 pr-4 py-2 text-white focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <p className="mt-1 text-sm text-gray-400">
+                    Enter event budget in Naira (numbers only)
+                  </p>
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-300 mb-2">

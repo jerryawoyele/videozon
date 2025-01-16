@@ -116,6 +116,30 @@ const userSchema = new mongoose.Schema({
       type: Boolean,
       default: false
     }
+  },
+  paymentInfo: {
+    accountNumber: String,
+    bankCode: String,
+    bankName: String,
+    accountName: String,
+    businessName: String,
+    paystackSubaccountCode: String,
+    paystackSubaccountId: String,
+    mobileMoneyNumber: String,
+    mobileMoneyProvider: {
+      type: String,
+      enum: ['mtn', 'airtel', 'glo', '9mobile', null],
+      default: null
+    }
+  },
+  profile: {
+    firstName: String,
+    lastName: String,
+    bio: String,
+    completedOnboarding: {
+      type: Boolean,
+      default: false
+    }
   }
 }, { 
   timestamps: true,

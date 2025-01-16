@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import axios from 'axios';
 import io from 'socket.io-client';
 import toast from 'react-hot-toast';
+import { CloudCog } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext(null);
 
@@ -21,28 +23,79 @@ export const AuthProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [onlineUsers, setOnlineUsers] = useState(new Set());
+  const [loading, setLoading] = useState(true);
+  const [isNewUser, setIsNewUser] = useState(false);
+  const navigate = useNavigate();
+
+  // Add this useEffect to handle initial loading state
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        const storedUser = localStorage.getItem('user');
+        const token = localStorage.getItem('token');
+        
+        if (storedUser && token) {
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          setUser(JSON.parse(storedUser));
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
+  const updateUser = (userData) => {
+    const updatedUser = {
+      ...user, // Keep existing user data
+      ...userData, // Merge new data
+      bio: userData.bio || user?.bio || '',
+      services: userData.services || user?.services || [],
+      avatarUrl: userData.avatarUrl || userData.avatar?.url || user?.avatarUrl
+    };
+
+    // Update state
+    setUser(updatedUser);
+    
+    // Update localStorage
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  };
+  
 
   const login = useCallback(async (userData) => {
-    setUser(userData);
-    // Store user data in localStorage
-    localStorage.setItem('user', JSON.stringify(userData));
+    setLoading(true);
+    try {
+      setUser(userData);
+      // Store user data in localStorage
+      localStorage.setItem('user', JSON.stringify(userData));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const logout = useCallback(async () => {
-    // Clean up socket connection
-    if (socket) {
-      socket.disconnect();
+    setLoading(true);
+    try {
+      // Clean up socket connection
+      if (socket) {
+        socket.disconnect();
+      }
+      // Clear stored data
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      // Clear authorization header
+      delete axios.defaults.headers.common['Authorization'];
+      // Reset states
+      setUser(null);
+      setSocket(null);
+      setUnreadNotifications(0);
+      setOnlineUsers(new Set());
+    } finally {
+      setLoading(false);
     }
-    // Clear stored data
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    // Clear authorization header
-    delete axios.defaults.headers.common['Authorization'];
-    // Reset states
-    setUser(null);
-    setSocket(null);
-    setUnreadNotifications(0);
-    setOnlineUsers(new Set());
   }, [socket]);
 
   // Initialize socket connection
@@ -224,6 +277,37 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user, socket]);
 
+  const handleAuthResponse = (data) => {
+    setToken(data.token);
+    setUser(data.user);
+    setIsNewUser(data.user.isNewUser);
+    localStorage.setItem('token', data.token);
+  };
+
+  const verifyEmail = async (token) => {
+    try {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/verify-email`, { token });
+      handleAuthResponse(response.data);
+      
+      // If it's a new user, redirect to profile
+      if (response.data.user.isNewUser) {
+        navigate('/profile');
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (error) {
+      // ... error handling ...
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -233,6 +317,9 @@ export const AuthProvider = ({ children }) => {
       isUserOnline,
       unreadNotifications,
       setUnreadNotifications,
+      loading,
+      updateUser,
+      isNewUser,
     }}>
       {children}
     </AuthContext.Provider>

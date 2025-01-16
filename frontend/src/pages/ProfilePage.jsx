@@ -10,6 +10,8 @@ import EditProfileModal from '../components/profiles/EditProfileModal';
 import PortfolioModal from '../components/profiles/PortfolioModal';
 import AvailabilityModal from '../components/profiles/AvailabilityModal';
 import DefaultAvatar from '../components/DefaultAvatar';
+import { PROFESSIONAL_SERVICES } from '../constants/services';
+import OnboardingForm from '../components/profiles/OnboardingForm';
 
 const Avatar = ({ user, className = "w-10 h-10" }) => {
   const [imgError, setImgError] = useState(false);
@@ -36,20 +38,10 @@ const Avatar = ({ user, className = "w-10 h-10" }) => {
   );
 };
 
-const PROFESSIONAL_SERVICES = [
-  { value: 'photographer', label: 'Photographer' },
-  { value: 'videographer', label: 'Videographer' },
-  { value: 'caterer', label: 'Caterer' },
-  { value: 'musician', label: 'Musician' },
-  { value: 'decorator', label: 'Decorator' },
-  { value: 'planner', label: 'Planner' },
-  { value: 'security', label: 'Security' },
-  { value: 'mc', label: 'MC' }
-];
-
 const ProfilePage = () => {
   const navigate = useNavigate();
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, isNewUser } = useAuth();
+  const [userDetails, setUserDetails] = useState(null);
   const [userEvents, setUserEvents] = useState([]);
   const [availability, setAvailability] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,14 +49,36 @@ const ProfilePage = () => {
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [portfolio, setPortfolio] = useState([]);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [profileData, setProfileData] = useState(null);
+
+  useEffect(() => {
+    const fetchUserDetails = async () => {
+      try {
+        const response = await axios.get(`/users/profile`);
+        if (response.data.success) {
+          const completeUserData = response.data.data.profile;
+          setUserDetails(completeUserData);
+          updateUser(completeUserData);
+        }
+      } catch (error) {
+        console.error('Fetch user details error:', error);
+        toast.error('Failed to fetch user details');
+      }
+    };
+
+    if (user?._id) {
+      fetchUserDetails();
+    }
+  }, [user?._id]);
 
   useEffect(() => {
     fetchUserEvents();
-    if (user?.role === 'professional') {
+    if (userDetails?.role === 'professional') {
       fetchAvailability();
       fetchPortfolio();
     }
-  }, [user]);
+  }, [userDetails]);
 
   const fetchUserEvents = async () => {
     try {
@@ -118,7 +132,7 @@ const ProfilePage = () => {
       }
       formData.append('name', profileData.name);
       formData.append('bio', profileData.bio);
-      if (user.role === 'professional') {
+      if (userDetails?.role === 'professional' && profileData.services) {
         formData.append('services', JSON.stringify(profileData.services));
       }
 
@@ -129,11 +143,9 @@ const ProfilePage = () => {
       });
 
       if (response.data.success) {
-        updateUser({
-          ...user,
-          ...response.data.data.profile
-        });
-      toast.success('Profile updated successfully');
+        const updatedProfile = response.data.data.profile;
+        updateUser(updatedProfile);
+        toast.success('Profile updated successfully');
         setShowEditModal(false);
       }
     } catch (error) {
@@ -185,6 +197,10 @@ const ProfilePage = () => {
     }
   };
 
+  const handleProfileUpdate = (updatedData) => {
+    setProfileData(updatedData);
+  };
+
   if (isLoading) {
     return (
       <Layout>
@@ -195,50 +211,58 @@ const ProfilePage = () => {
     );
   }
 
+  if (isNewUser) {
+    return <OnboardingForm />;
+  }
+
+  console.log("userDetails",userDetails);
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
         {/* Profile Header */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
           <div className="flex items-start space-x-6">
-            <Avatar user={user} className="w-32 h-32" />
+            <Avatar user={userDetails} className="w-32 h-32" />
             <div className="flex-1">
               <div className="flex justify-between">
                 <div>
-                  <h1 className="text-2xl font-bold text-white mb-2">{user.name}</h1>
-                  {user.role === 'professional' && (
+                  <h1 className="text-2xl font-bold text-white mb-2">{userDetails?.name}</h1>
+                  {userDetails?.role === 'professional' && (
                     <div className="flex items-center space-x-4 text-gray-300">
                       <div className="flex items-center">
                         <Star className="h-5 w-5 text-yellow-500 mr-1" />
-                        <span>{user?.rating?.toFixed(1) || 'No rating'}</span>
+                        <span>{userDetails?.rating?.toFixed(1) || 'No rating'}</span>
                       </div>
-                      <div>{user?.completedEvents || 0} events completed</div>
+                      <div>{userDetails?.completedEvents || 0} events completed</div>
                     </div>
                   )}
-                  <p className="text-gray-400 mt-2">{user.bio || 'No bio available'}</p>
-                  {user.role === 'professional' && (
+                  <p className="text-gray-400 mt-2">{userDetails?.bio || 'No bio available'}</p>
+                  {userDetails?.role === 'professional' && (
                     <div className="flex flex-wrap gap-2 mt-4">
-                      {user.services?.map((service) => (
-                        <span
-                          key={service}
-                          className="px-3 py-1 bg-gray-700 rounded-full text-sm text-gray-300"
-                        >
-                        {service.charAt(0).toUpperCase() + service.slice(1)}
-                        </span>
-                      ))}
+                      {userDetails.services?.map((serviceId) => {
+                        const service = PROFESSIONAL_SERVICES.find(s => s.id === serviceId);
+                        return service ? (
+                          <span
+                            key={serviceId}
+                            className="px-3 py-1 bg-gray-700 rounded-full text-sm text-gray-300"
+                          >
+                            {service.label}
+                          </span>
+                        ) : null;
+                      })}
                     </div>
                   )}
                 </div>
                 <div className="flex space-x-3">
                   <button
                     onClick={() => setShowEditModal(true)}
-                    className="h-10 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    className="h-10 max-lg:h-16 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                   >
                     Edit Profile
                   </button>
                   <button
                     onClick={() => navigate('/settings')}
-                    className="h-10 w-10 bg-gray-700 text-white rounded-md hover:bg-gray-600 flex items-center justify-center"
+                    className="h-10 w-10 max-lg:w-16 bg-gray-700 text-white rounded-md hover:bg-gray-600 flex items-center justify-center"
                   >
                     <Settings className="h-4 w-4" />
                   </button>
@@ -252,7 +276,7 @@ const ProfilePage = () => {
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-white">
-              {user.role === 'professional' ? 'My Events' : 'Events I\'ve Created'}
+              {userDetails?.role === 'professional' ? 'My Events' : 'Events I\'ve Created'}
             </h2>
           </div>
           {userEvents?.length > 0 ? (
@@ -287,13 +311,13 @@ const ProfilePage = () => {
           ) : (
             <div className="text-center py-8">
               <p className="text-gray-400">
-                {user.role === 'professional' ? 'No events yet' : 'You haven\'t created any events yet'}
+                {userDetails?.role === 'professional' ? 'No events yet' : 'You haven\'t created any events yet'}
               </p>
             </div>
           )}
         </div>
 
-        {user.role === 'professional' && (
+        {userDetails?.role === 'professional' && (
           <>
             {/* Portfolio Section */}
             <div className="bg-gray-800 rounded-lg p-6 mb-6">
@@ -379,7 +403,7 @@ const ProfilePage = () => {
           isOpen={showEditModal}
           onClose={() => setShowEditModal(false)}
           onSubmit={handleUpdateProfile}
-          user={user}
+          user={userDetails}
         />
       )}
 

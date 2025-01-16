@@ -37,7 +37,11 @@ const ProfessionalsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedService, setSelectedService] = useState('');
-  const { user } = useAuth(); // Get current user
+  const { user } = useAuth();
+
+  const [selectedRating, setSelectedRating] = useState('');
+  const [selectedAvailability, setSelectedAvailability] = useState('');
+  const [selectedLocation, setSelectedLocation] = useState('');
 
   const services = [
     'photographer',
@@ -60,22 +64,34 @@ const ProfessionalsPage = () => {
   
   const fetchProfessionals = async () => {
     try {
-      const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
-      if (selectedService) params.append('service', selectedService);
+      setIsLoading(true);
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/users/professionals`, {
+        params: {
+          services: selectedService,
+          search: searchTerm,
+          rating: selectedRating,
+          availability: selectedAvailability,
+          location: selectedLocation
+        }
+      });
 
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/users/professionals?${params.toString()}`
-      );
-
-      // Filter out the current user from the professionals list
-      const filteredProfessionals = response.data.data.professionals.filter(
-        prof => prof._id !== user._id
-      );
-
-      setProfessionals(filteredProfessionals);
+      if (response.data && response.data.success) {
+        const filteredProfessionals = response.data.data.professionals.filter(
+          prof => prof._id !== user._id
+        );
+        console.log('Current user:', user._id);
+        console.log('Professionals before filtering:', response.data.data.professionals);
+        console.log('Professionals after filtering:', filteredProfessionals);
+        setProfessionals(filteredProfessionals);
+      } else {
+        console.error('Invalid response format:', response.data);
+        setProfessionals([]);
+        toast.error('Failed to load professionals');
+      }
     } catch (error) {
-      toast.error('Failed to fetch professionals');
+      console.error('Error fetching professionals:', error);
+      setProfessionals([]);
+      toast.error('Failed to load professionals');
     } finally {
       setIsLoading(false);
     }

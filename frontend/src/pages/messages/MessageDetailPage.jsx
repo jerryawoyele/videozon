@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Send,
@@ -19,7 +19,7 @@ import {
   LogOut,
   Menu,
   X,
-  Briefcase,
+  Briefcase,  
 } from "lucide-react";
 import axios from '../../utils/axios';
 import toast from "react-hot-toast";
@@ -109,6 +109,17 @@ const MessageDetailPage = () => {
   const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+
+  const showOptionsIcon = useMemo(() => {
+    // Only show options if:
+    // 1. Current user is a professional
+    // 2. The partner (other user) is a client
+    return (
+      user?.role === 'client' && 
+      partner?.role === 'professional'
+    );
+  }, [user?.role, partner?.role]);
 
   // Initialize conversation without polling
   useEffect(() => {
@@ -117,23 +128,23 @@ const MessageDetailPage = () => {
         try {
           setIsLoading(true);
           await fetchMessages();
-          // Mark messages as read when entering chat
-          await markMessagesAsRead();
-
-          // Always scroll to bottom first
-          setTimeout(() => {
+          
+          // Add a small delay to ensure messages are loaded
+          setTimeout(async () => {
+            await markMessagesAsRead();
+            
             const container = messagesContainerRef.current;
             if (container) {
               container.scrollTop = container.scrollHeight;
             }
 
-            // Then check for unread messages and scroll if needed
             setTimeout(() => {
               scrollToUnreadIfExists();
-            });
+            }, 100);
 
             inputRef.current?.focus();
-          });
+          }, 100);
+          
         } catch (error) {
           console.error('Error initializing conversation:', error);
         } finally {
@@ -151,7 +162,68 @@ const MessageDetailPage = () => {
         console.error('No partner ID available');
         return;
       }
+
+      console.log('Starting to mark messages as read...');
+      console.log('Current messages:', messages);
+
+      // First mark the conversation as read
       await axios.put(`/messages/conversation/${id}/read`);
+
+      // Then specifically mark any hire requests, service offers, or their response messages as read
+      const unreadRequests = messages.filter(msg => {
+        const isUnreadRequest = (
+          msg.type?.toLowerCase() === 'hire_request' || 
+          msg.type?.toLowerCase() === 'service_request' ||
+          msg.type?.toLowerCase() === 'service_offer' ||
+          (msg.type === 'message' && msg.relatedEvent)
+        ) && 
+        msg.status === 'unread' &&
+        msg.receiver?._id === user?._id;
+
+        console.log('Message check:', {
+          messageId: msg._id,
+          type: msg.type,
+          status: msg.status,
+          receiverId: msg.receiver?._id,
+          userId: user?._id,
+          isUnreadRequest
+        });
+
+        return isUnreadRequest;
+      });
+
+      console.log('Unread requests found:', unreadRequests);
+
+      // Update each unread request
+      for (const msg of unreadRequests) {
+        console.log('Processing message:', {
+          messageId: msg._id,
+          type: msg.type,
+          status: msg.status
+        });
+
+        try {
+          const endpoint = msg.type?.toLowerCase() === 'service_offer' 
+            ? `/messages/${msg._id}/mark-service-offer-read`
+            : `/messages/${msg._id}/mark-request-read`;
+          
+          console.log('Using endpoint:', endpoint);
+          const response = await axios.put(endpoint);
+          console.log('Mark as read response:', response.data);
+        } catch (error) {
+          console.error('Error marking message as read:', {
+            messageId: msg._id,
+            type: msg.type,
+            error: error.response?.data || error.message
+          });
+        }
+      }
+
+      if (unreadRequests.length > 0) {
+        console.log('Refreshing messages after marking as read');
+        await fetchMessages();
+      }
+
     } catch (error) {
       console.error('Error marking messages as read:', error);
     }
@@ -346,9 +418,15 @@ const MessageDetailPage = () => {
   const scrollToUnreadIfExists = () => {
     if (!messages.length) return;
 
-    // Find the first unread message
+    // Find the first unread message, including response messages
     const firstUnreadIndex = messages.findIndex(msg =>
-      msg.receiver?._id === user?._id && msg.status === 'unread'
+      msg.receiver?._id === user?._id && 
+      msg.status === 'unread' && 
+      (
+        msg.type?.toLowerCase() === 'hire_request' || 
+        msg.type?.toLowerCase() === 'service_offer' ||
+        (msg.type === 'message' && msg.relatedEvent) // Include response messages
+      )
     );
 
     // If there are unread messages, scroll to the first unread one
@@ -652,6 +730,14 @@ const MessageDetailPage = () => {
 
   const handleAcceptServiceMessage = async (messageId) => {
     try {
+      // Find the message from messages array using messageId
+      const message = messages.find(msg => msg._id === messageId);
+      if (!message) {
+        throw new Error('Message not found');
+      }
+
+      const isServiceOffer = message.type === 'SERVICE_OFFER';
+      
       const response = await axios.put(`/messages/${messageId}/accept-${isServiceOffer ? 'service-offer' : 'hire-request'}`);
       if (response.data.success) {
         toast.success(`${isServiceOffer ? 'Service offer' : 'Hire request'} accepted`);
@@ -671,6 +757,13 @@ const MessageDetailPage = () => {
 
   const handleRejectServiceMessage = async (messageId) => {
     try {
+      const message = messages.find(msg => msg._id === messageId);
+      if (!message) {
+        throw new Error('Message not found');
+      }
+
+      const isServiceOffer = message.type === 'SERVICE_OFFER';
+      
       const response = await axios.put(`/messages/${messageId}/reject-${isServiceOffer ? 'service-offer' : 'hire-request'}`);
       if (response.data.success) {
         toast.success(`${isServiceOffer ? 'Service offer' : 'Hire request'} declined`);
@@ -688,6 +781,10 @@ const MessageDetailPage = () => {
       console.error('Error declining request:', error);
       toast.error(error.response?.data?.message || 'Failed to decline request');
     }
+  };
+
+  const handleOptionsClick = () => {
+    setShowOptionsMenu(!showOptionsMenu);
   };
 
   return (
@@ -887,39 +984,41 @@ const MessageDetailPage = () => {
                             </div>
                           )}
 
-                          {/* Options Menu Button */}
-                          <div className="relative">
-                            <button
-                              onClick={() => setOpenMessageMenu(openMessageMenu ? null : 'header-options')}
-                              className="p-2 text-gray-400 hover:text-white rounded-full hover:bg-gray-700"
-                            >
-                              <MoreVertical className="h-5 w-5" />
-                            </button>
-
-                            {/* Options Menu */}
-                            {openMessageMenu === 'header-options' && (
-                              <div className="absolute right-0 bg-gray-600 mt-2 w-48 rounded-lg shadow-lg py-1 z-10">
-                                <div
-                                  className="fixed inset-0 z-0"
-                                  onClick={() => setOpenMessageMenu(null)}
-                                />
-                                <div className="relative z-10">
-                                  {partner?.role === 'professional' && (
+                          {/* Only show options icon if showOptionsIcon is true */}
+                          {showOptionsIcon && (
+                            <div className="relative">
+                              <button 
+                                className="p-2 hover:bg-gray-700 rounded-full"
+                                onClick={handleOptionsClick}
+                              >
+                                <MoreVertical className="w-5 h-5 text-gray-400" />
+                              </button>
+                              
+                              {/* Dropdown Menu */}
+                              {showOptionsMenu && (
+                                <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-lg py-1 z-10">
+                                  <div
+                                    className="fixed inset-0 z-0"
+                                    onClick={() => setShowOptionsMenu(false)}
+                                  />
+                                  <div className="relative z-10">
                                     <button
                                       onClick={() => {
                                         navigate(`/hire/${partner?._id}`);
-                                        setOpenMessageMenu(null);
+                                        setShowOptionsMenu(false);
                                       }}
                                       className="flex items-center w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
                                     >
                                       <Briefcase className="h-4 w-4 mr-2" />
                                       Hire Professional
                                     </button>
-                                  )}
+                                    {/* Add more options here if needed */}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                          </div>
+                              )}
+                              
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">

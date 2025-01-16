@@ -5,7 +5,7 @@ import VerificationPending from '../pages/auth/VerificationPending';
 import VerifyEmail from '../pages/auth/VerifyEmail';
 import ForgotPassword from '../pages/auth/ForgotPassword';
 import ResetPassword from '../pages/auth/ResetPassword';
-import DashboardPage from '../pages/DashboardPage';
+import DashboardPage from '../pages/dashboard/DashboardPage';
 import ProfilePage from '../pages/ProfilePage';
 import SettingsPage from '../pages/SettingsPage';
 import EventsPage from '../pages/events/EventsPage';

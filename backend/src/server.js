@@ -64,6 +64,9 @@ app.use((req, res, next) => {
 // Configure Socket.IO
 const io = initializeSocket(httpServer);
 
+// Make io available globally
+global.io = io;
+
 // Socket.IO authentication middleware
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;

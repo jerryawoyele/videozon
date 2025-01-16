@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Layout from '../components/Layout';
+import Layout from '../../components/Layout';
 import { 
   Calendar, MessageSquare, Bell, 
   Clock, Archive, AlertCircle,
   Eye, CheckCircle, Briefcase,
   DollarSign
 } from 'lucide-react';
-import axios from 'axios';
+import axios from '../../utils/axios';
 import toast from 'react-hot-toast';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 
 const DashboardPage = () => {
   const navigate = useNavigate();
@@ -21,7 +21,10 @@ const DashboardPage = () => {
     unreadMessages: 0,
     unreadNotifications: 0,
     pendingRequests: 0,
-    recentEvents: []
+    recentEvents: [],
+    totalEarnings: 0,
+    activeGigs: 0,
+    currentGigs: []
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -31,35 +34,9 @@ const DashboardPage = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_API_URL}/dashboard`);
+      const response = await axios.get('/dashboard/stats');
       if (response.data.success) {
-        const { stats } = response.data.data;
-        
-        // Format the data based on user role
-        if (user.role === 'professional') {
-          setStats({
-            ...stats,
-            currentGigs: stats.currentGigs?.map(gig => ({
-              ...gig,
-              event: {
-                ...gig,
-                _id: gig._id,
-                title: gig.title,
-                datetime: gig.datetime
-              }
-            })) || []
-          });
-        } else {
-          setStats({
-            ...stats,
-            recentEvents: stats.recentEvents?.map(event => ({
-              ...event,
-              _id: event._id,
-              title: event.title,
-              datetime: event.datetime
-            })) || []
-          });
-        }
+        setStats(response.data.data.stats);
       }
     } catch (error) {
       console.error('Dashboard error:', error);
@@ -87,7 +64,7 @@ const DashboardPage = () => {
       </Layout>
     );
   }
-  console.log("stats", stats);
+
   return (
     <Layout>
       <div className="p-6">
@@ -162,9 +139,20 @@ const DashboardPage = () => {
                       >
                         <div>
                           <h3 className="text-white font-medium">{gig.event.title}</h3>
-                          <p className="text-sm text-gray-400">
-                            {formatDate(gig.event.datetime)}
-                          </p>
+                          <div className="flex flex-col space-y-1">
+                            <p className="text-sm text-gray-400">
+                              {formatDate(gig.event.datetime)}
+                            </p>
+                            <p className="text-sm text-gray-400">
+                              Service: {gig.service}
+                            </p>
+                            <p className="text-sm text-gray-400">
+                              Organizer: {gig.event.organizer?.name}
+                            </p>
+                            <p className="text-sm text-gray-400">
+                              Location: {gig.event.location}
+                            </p>
+                          </div>
                         </div>
                         <Eye className="h-5 w-5 text-gray-400" />
                       </div>

@@ -4,9 +4,11 @@ import { Mail, Lock, User, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import Logo from '../../components/Logo';
+import { useAuth } from '../../context/AuthContext';
 
 const SignUp = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -67,26 +69,21 @@ const SignUp = () => {
     }
 
     try {
-      // Remove confirmPassword before sending to backend
-      const { confirmPassword, ...registrationData } = formData;
-      
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/auth/register`,
-        registrationData
-      );
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/register`, {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role
+      });
 
       if (response.data.success) {
-        toast.success('Registration successful! Please check your email for verification.');
-        localStorage.setItem('pendingVerificationEmail', formData.email);
-        navigate('/verification-pending');
+        toast.success(response.data.message);
+        // Navigate to verification pending page
+        navigate(response.data.redirectTo || '/verification-pending');
       }
     } catch (error) {
-      console.error('Registration error:', error);
-      const errorMessage = 
-        error.response?.data?.message || 
-        'Registration failed. Please try again.';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      console.error('Signup error:', error);
+      toast.error(error.response?.data?.message || 'Failed to create account');
     } finally {
       setIsLoading(false);
     }

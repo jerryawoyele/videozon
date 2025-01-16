@@ -1,39 +1,139 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Bell, Lock, Shield, ArrowLeft } from 'lucide-react';
-import axios from '../utils/axios';  // Import configured axios instance with auth headers
+import { 
+  Bell, Lock, Shield, ArrowLeft, DollarSign, 
+  ChevronDown, ChevronUp, Smartphone, CreditCard
+} from 'lucide-react';
+import axios from '../utils/axios';
 import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
+
+const SettingSection = ({ title, icon: Icon, isOpen, onToggle, children }) => {
+  return (
+    <div className="bg-gray-800 rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-700 transition-colors"
+      >
+        <div className="flex items-center">
+          <Icon className="h-5 w-5 mr-2" />
+          <h3 className="text-lg font-medium text-white">{title}</h3>
+        </div>
+        {isOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+      </button>
+      {isOpen && <div className="p-6 border-t border-gray-700">{children}</div>}
+    </div>
+  );
+};
 
 const SettingsPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
-  const [settingsData, setSettingsData] = useState({
-    emailNotifications: true,
-    pushNotifications: true,
+  
+  // State for section visibility
+  const [openSections, setOpenSections] = useState({
+    notifications: false,
+    security: false,
+    bankTransfer: false,
+    mobileMoney: false,
+    password: false
+  });
+
+  // State for displaying current settings
+  const [currentSettings, setCurrentSettings] = useState({
+    notifications: {
+      emailNotifications: false,
+      pushNotifications: false,
     marketingEmails: false,
-    twoFactorAuth: false,
+      twoFactorAuth: false
+    },
+    payment: {
+      preferredMethod: '', // 'card', 'transfer', or 'mobile'
+      card: {
+        number: '',
+        expiryDate: '',
+        cvv: '',
+        name: ''
+      },
+      transfer: {
+        accountNumber: '',
+        bankCode: '',
+        bankName: '',
+        accountName: '',
+        businessName: ''
+      },
+      mobile: {
+        phoneNumber: '',
+        provider: null
+      }
+    },
+    password: {
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
+    }
   });
 
-  useEffect(() => {
-    fetchSettings();
-  }, []);
+  // Separate state for form changes
+  const [formChanges, setFormChanges] = useState(null);
 
+  // Toggle section visibility only
+  const toggleSection = (section) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+    
+    // Initialize form changes when first opening any section
+    if (!formChanges) {
+      setFormChanges({...currentSettings});
+    }
+  };
+
+  // Fetch settings from backend
+  useEffect(() => {
   const fetchSettings = async () => {
     try {
       const response = await axios.get('/users/settings');
       if (response.data.success) {
-        setSettingsData(prev => ({
-          ...prev,
-          ...response.data.data.settings,
+          const { settings, paymentInfo } = response.data.data;
+          
+          const newSettings = {
+            notifications: {
+              ...settings
+            },
+            payment: {
+              preferredMethod: '',
+              card: {
+                number: '',
+                expiryDate: '',
+                cvv: '',
+                name: ''
+              },
+              transfer: {
+                accountNumber: '',
+                bankCode: '',
+                bankName: '',
+                accountName: '',
+                businessName: ''
+              },
+              mobile: {
+                phoneNumber: '',
+                provider: null
+              }
+            },
+            password: {
           currentPassword: '',
           newPassword: '',
           confirmPassword: ''
-        }));
+            }
+          };
+
+          setCurrentSettings(newSettings);
       }
     } catch (error) {
       toast.error('Failed to fetch settings');
@@ -42,53 +142,123 @@ const SettingsPage = () => {
     }
   };
 
-  const handleSettingsSubmit = async (e) => {
+    fetchSettings();
+  }, [user]);
+
+  // Handle form input changes
+  const handleChange = (section, field, value) => {
+    if (!formChanges) {
+      // Initialize formChanges with current settings if not already initialized
+      setFormChanges({...currentSettings});
+    }
+    setFormChanges(prev => ({
+      ...prev,
+      [section]: {
+        ...(prev?.[section] || {}),
+        [field]: value
+      }
+    }));
+  };
+
+  // Handle form submission
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formChanges) {
+      navigate('/profile');
+      return;
+    }
+    
     setIsLoading(true);
 
     try {
-      // Only send password fields if they're filled
-      const dataToSend = {
-        emailNotifications: settingsData.emailNotifications,
-        pushNotifications: settingsData.pushNotifications,
-        marketingEmails: settingsData.marketingEmails,
-        twoFactorAuth: settingsData.twoFactorAuth
-      };
+      // Only include fields that have actually changed
+      const dataToSend = {};
 
-      if (settingsData.currentPassword && settingsData.newPassword) {
-        if (settingsData.newPassword !== settingsData.confirmPassword) {
+      // Add notifications if they've changed
+      if (formChanges.notifications) {
+        dataToSend.notifications = {
+          emailNotifications: formChanges.notifications.emailNotifications ?? currentSettings.notifications.emailNotifications,
+          pushNotifications: formChanges.notifications.pushNotifications ?? currentSettings.notifications.pushNotifications,
+          twoFactorAuth: formChanges.notifications.twoFactorAuth ?? currentSettings.notifications.twoFactorAuth
+        };
+      }
+
+      // Add password changes if they exist
+      if (formChanges.password?.currentPassword && formChanges.password?.newPassword) {
+        if (formChanges.password.newPassword !== formChanges.password.confirmPassword) {
           toast.error('New passwords do not match');
           return;
         }
-        dataToSend.currentPassword = settingsData.currentPassword;
-        dataToSend.newPassword = settingsData.newPassword;
+        dataToSend.currentPassword = formChanges.password.currentPassword;
+        dataToSend.newPassword = formChanges.password.newPassword;
       }
 
+      // Only include payment info if it's been changed
+      if (formChanges.payment) {
+        dataToSend.payment = formChanges.payment;
+      }
+
+      console.log('Sending data:', dataToSend);
+
       const response = await axios.patch('/users/settings', dataToSend);
+      console.log('Response:', response);
 
       if (response.data.success) {
         toast.success('Settings updated successfully');
-        // Clear password fields after successful update
-        setSettingsData(prev => ({
-          ...prev,
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: ''
-        }));
+        navigate('/profile');
+      } else {
+        toast.error(response.data.message || 'Failed to update settings');
       }
     } catch (error) {
-      const message = error.response?.data?.message || 'Failed to update settings';
-      toast.error(message);
+      console.error('Settings update error:', error);
+      console.error('Error response:', error.response);
+      toast.error(error.response?.data?.message || 'Failed to update settings');
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Handle cancel
+  const handleCancel = () => {
+    // Simply navigate back to profile without saving
+    navigate('/profile');
+  };
+
+  // Also add state for banks
+  const [banks, setBanks] = useState([]);
+
+  // Add useEffect to fetch banks
+  useEffect(() => {
+    const fetchBanks = async () => {
+      try {
+        const response = await axios.get('/banks');
+        if (response.data.success) {
+          setBanks(response.data.data.banks);
+        }
+      } catch (error) {
+        console.error('Fetch banks error:', error);
+      }
+    };
+
+    fetchBanks();
+  }, []);
+
+  const handlePaymentMethodSelect = (method) => {
+    // Paystack URLs for different payment methods
+    const paystackUrls = {
+      'bank-account': 'https://dashboard.paystack.com/#/payment-pages/bank-transfer',
+      'mobile-money': 'https://dashboard.paystack.com/#/payment-pages/mobile-money',
+      'business': 'https://dashboard.paystack.com/#/payment-pages/business'
+    };
+
+    // Redirect to the corresponding Paystack URL
+    window.location.href = paystackUrls[method];
+  };
+
   return (
     <Layout>
-      <div className="p-6">
+      <div className="container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto">
-          {/* Back Button */}
           <button
             onClick={() => navigate('/profile')}
             className="flex items-center text-gray-400 hover:text-white mb-6 transition-colors"
@@ -104,23 +274,21 @@ const SettingsPage = () => {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
             </div>
           ) : (
-            <form onSubmit={handleSettingsSubmit} className="space-y-6">
-              {/* Notifications */}
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h3 className="text-lg font-medium text-white mb-4">
-                  <Bell className="inline-block mr-2 h-5 w-5" />
-                  Notifications
-                </h3>
+            <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
+              {/* Notifications Section */}
+              <SettingSection
+                title="Notifications"
+                icon={Bell}
+                isOpen={openSections.notifications}
+                onToggle={() => toggleSection('notifications')}
+              >
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <label className="text-gray-300">Email Notifications</label>
                     <input
                       type="checkbox"
-                      checked={settingsData.emailNotifications}
-                      onChange={(e) => setSettingsData(prev => ({
-                        ...prev,
-                        emailNotifications: e.target.checked
-                      }))}
+                      checked={(formChanges?.notifications?.emailNotifications ?? currentSettings.notifications.emailNotifications)}
+                      onChange={(e) => handleChange('notifications', 'emailNotifications', e.target.checked)}
                       className="toggle"
                     />
                   </div>
@@ -128,82 +296,129 @@ const SettingsPage = () => {
                     <label className="text-gray-300">Push Notifications</label>
                     <input
                       type="checkbox"
-                      checked={settingsData.pushNotifications}
-                      onChange={(e) => setSettingsData(prev => ({
-                        ...prev,
-                        pushNotifications: e.target.checked
-                      }))}
+                      checked={(formChanges?.notifications?.pushNotifications ?? currentSettings.notifications.pushNotifications)}
+                      onChange={(e) => handleChange('notifications', 'pushNotifications', e.target.checked)}
                       className="toggle"
                     />
                   </div>
                 </div>
-              </div>
+              </SettingSection>
 
-              {/* Security */}
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h3 className="text-lg font-medium text-white mb-4">
-                  <Shield className="inline-block mr-2 h-5 w-5" />
-                  Security
-                </h3>
+              {/* Security Section */}
+              <SettingSection
+                title="Security"
+                icon={Shield}
+                isOpen={openSections.security}
+                onToggle={() => toggleSection('security')}
+              >
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <label className="text-gray-300">Two-Factor Authentication</label>
                     <input
                       type="checkbox"
-                      checked={settingsData.twoFactorAuth}
-                      onChange={(e) => setSettingsData(prev => ({
-                        ...prev,
-                        twoFactorAuth: e.target.checked
-                      }))}
+                      checked={(formChanges?.notifications?.twoFactorAuth ?? currentSettings.notifications.twoFactorAuth)}
+                      onChange={(e) => handleChange('notifications', 'twoFactorAuth', e.target.checked)}
                       className="toggle"
                     />
                   </div>
                 </div>
-              </div>
+              </SettingSection>
 
-              {/* Password Change */}
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h3 className="text-lg font-medium text-white mb-4">
-                  <Lock className="inline-block mr-2 h-5 w-5" />
-                  Change Password
-                </h3>
+              {/* Payment Information Section */}
+              <SettingSection
+                title="Payment Information"
+                icon={DollarSign}
+                isOpen={openSections.payment}
+                onToggle={() => toggleSection('payment')}
+              >
+                <div className="space-y-4">
+                  {/* Bank Transfer Option */}
+                  <div 
+                    onClick={() => handlePaymentMethodSelect('bank-account')}
+                    className="bg-gray-700 hover:bg-gray-600 rounded-lg p-4 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-medium text-white">Bank Account</h3>
+                        <p className="text-gray-400 text-sm mt-1">Link your bank account for direct deposits</p>
+                      </div>
+                      <CreditCard className="h-6 w-6 text-gray-400" />
+                    </div>
+                  </div>
+
+                  {/* Mobile Money Option */}
+                  <div 
+                    onClick={() => handlePaymentMethodSelect('mobile-money')}
+                    className="bg-gray-700 hover:bg-gray-600 rounded-lg p-4 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-medium text-white">Mobile Money</h3>
+                        <p className="text-gray-400 text-sm mt-1">Use your mobile money account</p>
+                      </div>
+                      <Smartphone className="h-6 w-6 text-gray-400" />
+                    </div>
+                  </div>
+
+                  {/* Business Account Option */}
+                  <div 
+                    onClick={() => handlePaymentMethodSelect('business')}
+                    className="bg-gray-700 hover:bg-gray-600 rounded-lg p-4 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-medium text-white">Business Account</h3>
+                        <p className="text-gray-400 text-sm mt-1">Set up a business account for payments</p>
+                      </div>
+                      <DollarSign className="h-6 w-6 text-gray-400" />
+                    </div>
+                  </div>
+                </div>
+              </SettingSection>
+
+              {/* Password Section */}
+              <SettingSection
+                title="Change Password"
+                icon={Lock}
+                isOpen={openSections.password}
+                onToggle={() => toggleSection('password')}
+              >
                 <div className="space-y-4">
                   <input
                     type="password"
                     placeholder="Current Password"
-                    value={settingsData.currentPassword}
-                    onChange={(e) => setSettingsData(prev => ({
-                      ...prev,
-                      currentPassword: e.target.value
-                    }))}
+                    value={(formChanges?.password?.currentPassword ?? currentSettings.password.currentPassword)}
+                    onChange={(e) => handleChange('password', 'currentPassword', e.target.value)}
                     className="w-full bg-gray-700 border border-gray-600 rounded-md px-4 py-2 text-white"
                   />
                   <input
                     type="password"
                     placeholder="New Password"
-                    value={settingsData.newPassword}
-                    onChange={(e) => setSettingsData(prev => ({
-                      ...prev,
-                      newPassword: e.target.value
-                    }))}
+                    value={(formChanges?.password?.newPassword ?? currentSettings.password.newPassword)}
+                    onChange={(e) => handleChange('password', 'newPassword', e.target.value)}
                     className="w-full bg-gray-700 border border-gray-600 rounded-md px-4 py-2 text-white"
                   />
                   <input
                     type="password"
                     placeholder="Confirm New Password"
-                    value={settingsData.confirmPassword}
-                    onChange={(e) => setSettingsData(prev => ({
-                      ...prev,
-                      confirmPassword: e.target.value
-                    }))}
+                    value={(formChanges?.password?.confirmPassword ?? currentSettings.password.confirmPassword)}
+                    onChange={(e) => handleChange('password', 'confirmPassword', e.target.value)}
                     className="w-full bg-gray-700 border border-gray-600 rounded-md px-4 py-2 text-white"
                   />
                 </div>
-              </div>
+              </SettingSection>
 
-              <div className="flex justify-end">
+              <div className="flex justify-end space-x-3">
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleCancel}
+                  className="px-6 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
                   disabled={isLoading}
                   className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                 >

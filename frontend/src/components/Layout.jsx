@@ -21,9 +21,12 @@ const Layout = ({ children }) => {
     const checkUnreadNotifications = async () => {
       try {
         const response = await api.get('/notifications/unread-count');
-        setUnreadNotifications(response.data.data.count);
+        if (response.data && response.data.success) {
+          setUnreadNotifications(response.data.data.count || 0);
+        }
       } catch (error) {
         console.error('Failed to fetch unread notifications:', error);
+        // Don't show error toast as this is a background check
       }
     };
 
@@ -40,10 +43,12 @@ const Layout = ({ children }) => {
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Events', href: '/events', icon: Calendar },
     { name: 'Professionals', href: '/professionals', icon: Users },
-    ...(isProfessional ? [
-      { name: 'Messages', href: '/messages', icon: Mail },
-      { name: 'My Gigs', href: '/gigs', icon: Briefcase }
-    ] : []),
+    { name: 'Messages', href: '/messages', icon: Mail },
+    { 
+      name: isProfessional ? 'My Gigs' : 'Assigned Gigs', 
+      href: '/gigs', 
+      icon: Briefcase 
+    },
     { name: 'Notifications', href: '/notifications', icon: Bell }
   ];
 

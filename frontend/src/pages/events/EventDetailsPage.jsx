@@ -114,7 +114,6 @@ const EventDetailsPage = () => {
 
     setIsSubmitting(true);
     try {
-      // Send service offer through the messaging system
       await axios.post(`${import.meta.env.VITE_API_URL}/messages/service-offer`, {
         receiverId: event.organizer._id,
         eventId: event._id,
@@ -297,6 +296,33 @@ const EventDetailsPage = () => {
     }
   };
 
+  const handleSendOffer = async (formData) => {
+    try {
+      setIsSubmitting(true);
+      const response = await axios.post('/messages/service-offer', {
+        receiverId: event.organizer._id,
+        eventId: event._id,
+        services: formData.selectedServices,
+        content: formData.message,
+        type: 'service_offer'
+      });
+
+      if (response.data.success) {
+        toast.success('Service offer sent successfully');
+        setShowOfferModal(false);
+        // Navigate and refresh
+        navigate(`/events/${response.data.data.eventId}`, { replace: true });
+        // Force a refresh after navigation
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Send offer error:', error);
+      toast.error(error.response?.data?.message || 'Failed to send offer');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <Layout>
@@ -395,7 +421,7 @@ const EventDetailsPage = () => {
                 </div>
                 
                 {/* Contact Button */}
-                {user._id !== event.organizer._id && (
+                {user._id !== event.organizer._id && user.role === 'professional' && (
                   <div className="w-full">
                     {hasContactedOrganizer || event.status === 'concluded' ? (
                       <div className="flex items-center justify-center text-gray-400 bg-gray-600/50 px-4 sm:px-6 py-3 rounded-lg w-full sm:w-auto">
